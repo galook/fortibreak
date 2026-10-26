@@ -184,7 +184,7 @@ enum BrowserSSO {
         address.sin_addr.s_addr=inet_addr("127.0.0.1")
         address.sin_port=UInt16(callbackPort).bigEndian
         let result=withUnsafePointer(to:&address) {$0.withMemoryRebound(to:sockaddr.self,capacity:1) {Darwin.bind(fd,$0,socklen_t(MemoryLayout<sockaddr_in>.size))}}
-        guard result==0 else {throw AppError("Browser sign-in needs port 8020, but another app is using it. Finish or cancel FortiClient sign-in, then retry ClearGate.")}
+        guard result==0 else {throw AppError("Browser sign-in needs port 8020, but another app is using it. Finish or cancel FortiClient sign-in, then retry FortiBreak.")}
     }
     static func loginURL(in line:String,profile:VPNProfile) -> URL? {
         // openfortivpn prints Authenticate at 'https://...'. Quotes are log punctuation.

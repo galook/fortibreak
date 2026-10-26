@@ -2,7 +2,7 @@
 """Exercise helper protocol unprivileged, using an isolated fake VPN executable."""
 import json, os, pathlib, socket, subprocess, tempfile, time, sys
 root=pathlib.Path(__file__).resolve().parent.parent
-with tempfile.TemporaryDirectory(prefix='cg-harness-') as tmp:
+with tempfile.TemporaryDirectory(prefix='fb-harness-') as tmp:
     base=pathlib.Path(tmp)
     fake=base/'fake-vpn'
     fake.write_text('#!'+sys.executable+'\n'+r'''import pathlib,subprocess,signal,sys,time
@@ -41,7 +41,7 @@ while True:signal.pause()
     profile=dict(id='11111111-1111-1111-1111-111111111111',name='Fixture',host='vpn.example.invalid',port=443,username='fixture',realm='',login='Password & MFA',vpnProtocol='ssl',favorite=False,caFile='',certificateFile='',keyFile='',trustedCertificate='',notes='',source='Fixture',importWarnings=[])
     def session(mode):
         # Short path stays within Darwin's 104-byte Unix socket limit.
-        with tempfile.TemporaryDirectory(prefix='cgt-',dir='/tmp') as directory:
+        with tempfile.TemporaryDirectory(prefix='fbt-',dir='/tmp') as directory:
             os.chmod(directory,0o700)
             server=socket.socket(socket.AF_UNIX);server.bind(directory+'/control.sock');server.listen(1);server.settimeout(10)
             process=subprocess.Popen([str(base/'Helper'),directory])

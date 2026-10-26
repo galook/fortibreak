@@ -5,7 +5,7 @@ it cannot receive a real FortiClient callback during the tests.
 """
 import json, os, pathlib, socket, subprocess, tempfile, urllib.request, sys
 root=pathlib.Path(__file__).resolve().parent.parent
-with tempfile.TemporaryDirectory(prefix='cg-saml-') as temporary:
+with tempfile.TemporaryDirectory(prefix='fb-saml-') as temporary:
     base=pathlib.Path(temporary)
     probe=socket.socket();probe.bind(('127.0.0.1',0));port=probe.getsockname()[1];probe.close()
     modefile=base/'mode'
@@ -52,7 +52,7 @@ while True:signal.pause()
         if mode=='busy':
             held=socket.socket();held.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);held.bind(('127.0.0.1',port));held.listen(1)
         try:
-            with tempfile.TemporaryDirectory(prefix='cgs-',dir='/tmp') as directory:
+            with tempfile.TemporaryDirectory(prefix='fbs-',dir='/tmp') as directory:
                 os.chmod(directory,0o700)
                 server=socket.socket(socket.AF_UNIX);server.bind(directory+'/control.sock');server.listen(1);server.settimeout(10)
                 process=subprocess.Popen([str(base/'Helper'),directory])

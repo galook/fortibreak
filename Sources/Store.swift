@@ -7,7 +7,7 @@ import Network
 import UserNotifications
 
 enum CredentialStore {
-    static let service = "eu.local.cleargate.vpn"
+    static let service = "eu.local.fortibreak.vpn"
     static func password(_ id: UUID) -> String {
         let query: [String:Any] = [kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:service,kSecAttrAccount as String:id.uuidString,kSecReturnData as String:true,kSecMatchLimit as String:kSecMatchLimitOne]
         var result: CFTypeRef?
@@ -32,7 +32,7 @@ enum CredentialStore {
     private var file: URL
     init(preview: Bool = false) {
         self.preview=preview
-        file=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("ClearGate/profiles.json")
+        file=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("FortiBreak/profiles.json")
         if preview {
             var p=VPNProfile();p.name="Studio network";p.host="vpn.example.com";p.username="your.name";p.favorite=true;p.notes="Internal tools, files, and services.";profiles=[p]
             var office=VPNProfile();office.name="Office";office.host="gate.example.org";office.login = .browser;office.notes="Single sign-on through the company browser login."
@@ -88,7 +88,7 @@ enum Preferences {
 enum Notifier {
     static var enabled:Bool {Preferences.notifications && !CommandLine.arguments.contains("--preview") && Bundle.main.bundleIdentifier != nil}
     static func requestPermission() {guard enabled else{return};UNUserNotificationCenter.current().requestAuthorization(options:[.alert,.sound]){_,_ in}}
-    // macOS shows these only while ClearGate is in the background.
+    // macOS shows these only while FortiBreak is in the background.
     static func post(_ title:String,_ body:String) {
         guard enabled else{return}
         let content=UNMutableNotificationContent();content.title=title;content.body=body
@@ -107,7 +107,7 @@ struct LogLine: Identifiable, Codable {
     init(date:Date=Date(),text:String){id=UUID();self.date=date;self.text=text}
 }
 enum SessionDiagnostics {
-    static var file:URL {FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("ClearGate/last-session.json")}
+    static var file:URL {FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("FortiBreak/last-session.json")}
     static func load(from file:URL=SessionDiagnostics.file)->[LogLine] {
         guard let data=try? Data(contentsOf:file),data.count<2_000_000,let lines=try? JSONDecoder().decode([LogLine].self,from:data) else{return []}
         return Array(lines.suffix(400))
@@ -201,16 +201,16 @@ private final class SessionChannel: @unchecked Sendable {
             helperReady=configuration.ownerUID==getuid() && configuration.appCDHash==localHash
         } catch {helperReady=false}
         helperInstalled=FileManager.default.fileExists(atPath:PrivilegedPaths.plist)
-        helperStatus=helperReady ? "VPN helper approved for this build" : helperInstalled ? "This ClearGate build needs the VPN helper approved again" : "One-time VPN helper setup needed"
+        helperStatus=helperReady ? "VPN helper approved for this build" : helperInstalled ? "This FortiBreak build needs the VPN helper approved again" : "One-time VPN helper setup needed"
     }
     func enableHelper(preview:Bool) {
         guard !preview,!busy,!helperSetupBusy else {return}
-        guard let executable=Bundle.main.url(forAuxiliaryExecutable:"ClearGateInstaller") else {helperStatus="Helper installer missing. Reinstall ClearGate.";return}
+        guard let executable=Bundle.main.url(forAuxiliaryExecutable:"FortiBreakInstaller") else {helperStatus="Helper installer missing. Reinstall FortiBreak.";return}
         runInstaller(shellQuote(executable.path)+" "+shellQuote(Bundle.main.bundlePath)+" "+String(getuid()),waiting:"Approve the one-time macOS setup prompt.",failure:"Helper setup")
     }
     func removeHelper(preview:Bool) {
         guard !preview,!busy,!helperSetupBusy else {return}
-        guard let executable=Bundle.main.url(forAuxiliaryExecutable:"ClearGateInstaller") else {helperStatus="Helper installer missing. Reinstall ClearGate.";return}
+        guard let executable=Bundle.main.url(forAuxiliaryExecutable:"FortiBreakInstaller") else {helperStatus="Helper installer missing. Reinstall FortiBreak.";return}
         runInstaller(shellQuote(executable.path)+" --uninstall",waiting:"Approve the macOS prompt to remove the helper.",failure:"Helper removal")
     }
     private func runInstaller(_ command:String,waiting:String,failure:String) {
@@ -281,7 +281,7 @@ private final class SessionChannel: @unchecked Sendable {
             guard backendReady else{throw AppError("VPN backend is missing. Install openfortivpn with Homebrew.")}
             refreshHelperState()
             guard helperReady,!helperSetupBusy else {throw AppError("Enable the VPN helper once before connecting.")}
-            let directory="/tmp/cg-"+UUID().uuidString
+            let directory="/tmp/fb-"+UUID().uuidString
             try FileManager.default.createDirectory(atPath:directory,withIntermediateDirectories:false,attributes:[.posixPermissions:0o700])
             let fd: Int32
             do { fd=try UnixSocket.create(directory+"/control.sock",server:true) } catch { try? FileManager.default.removeItem(atPath:directory);throw error }
@@ -361,7 +361,7 @@ private final class SessionChannel: @unchecked Sendable {
         case "prompt":
             guard !stopRequested else{return}
             state = .authenticating;prompt=event.text;statusDetail=event.text
-            if !NSApplication.shared.isActive {Notifier.post("ClearGate needs you",event.text+".");bringForward()}
+            if !NSApplication.shared.isActive {Notifier.post("FortiBreak needs you",event.text+".");bringForward()}
         case "browser":
             guard !stopRequested,let url=URL(string:event.text),url.scheme=="https" else{return}
             NSWorkspace.shared.open(url);statusDetail="Complete browser sign-in within about 50 seconds. Return here after login.";log("Browser sign-in opened. Callback is 127.0.0.1:8020; listener waits up to about 50 seconds. Session tokens are omitted from logs.")
@@ -395,7 +395,7 @@ private final class SessionChannel: @unchecked Sendable {
             state = .reconnecting;resetCounters()
             statusDetail=(reconnectAttempt==0 ? "Tunnel dropped." : "Reconnect attempt failed.")+" Reconnecting in \(Int(delay)) s (attempt \(reconnectAttempt+1) of \(ReconnectPolicy.delays.count))."
             log(ended);log(statusDetail)
-            if reconnectAttempt==0 {Notifier.post("VPN dropped",profile.name+" lost its tunnel. ClearGate is reconnecting.")}
+            if reconnectAttempt==0 {Notifier.post("VPN dropped",profile.name+" lost its tunnel. FortiBreak is reconnecting.")}
             scheduleReconnect(profile,after:delay)
             captureNetwork("After VPN session")
             return

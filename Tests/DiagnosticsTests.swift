@@ -3,7 +3,7 @@ import Darwin
 
 @main struct DiagnosticsTests {
     static func main()throws {
-        let directory=URL(fileURLWithPath:NSTemporaryDirectory()).appendingPathComponent("cg-diagnostics-"+UUID().uuidString)
+        let directory=URL(fileURLWithPath:NSTemporaryDirectory()).appendingPathComponent("fb-diagnostics-"+UUID().uuidString)
         defer{try? FileManager.default.removeItem(at:directory)}
         let file=directory.appendingPathComponent("last-session.json")
         let date=Date(timeIntervalSince1970:100)

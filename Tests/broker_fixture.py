@@ -4,7 +4,7 @@ No launchd job, root helper, administrator prompt, or VPN engine is installed.
 """
 import pathlib,subprocess,tempfile,os,socket,json,time,uuid,shutil
 root=pathlib.Path(__file__).resolve().parent.parent
-with tempfile.TemporaryDirectory(prefix='cg-broker-') as temporary:
+with tempfile.TemporaryDirectory(prefix='fb-broker-') as temporary:
     base=pathlib.Path(temporary)
     server_source=base/'Server.swift'
     server_source.write_text('''import Foundation
@@ -40,12 +40,12 @@ import Darwin
     subprocess.run(['swiftc','-parse-as-library',*common,str(client_source),'-o',str(base/'Good'),'-framework','Security'],check=True)
     shutil.copy2(base/'Good',base/'Other')
     for name in ['Good','Other']:
-        subprocess.run(['codesign','--force','--sign','-','--options','runtime','--identifier','eu.local.cleargate.test.'+name,str(base/name)],check=True,capture_output=True)
+        subprocess.run(['codesign','--force','--sign','-','--options','runtime','--identifier','eu.local.fortibreak.test.'+name,str(base/name)],check=True,capture_output=True)
     digest=subprocess.check_output([str(base/'Good'),'hash'],text=True).strip()
     worker=base/'worker';marker=base/'started'
     worker.write_text('#!/bin/sh\n/usr/bin/touch '+str(marker)+'\n');worker.chmod(0o700)
     def test_server(uid):
-        directory=tempfile.TemporaryDirectory(prefix='cgb-',dir='/tmp')
+        directory=tempfile.TemporaryDirectory(prefix='fbb-',dir='/tmp')
         path=directory.name+'/broker.sock'
         process=subprocess.Popen([str(base/'Server'),path,str(uid),digest,str(worker)])
         for _ in range(100):
@@ -64,7 +64,7 @@ import Darwin
         assert request(path,kind='shell')['kind']=='error','Arbitrary action accepted'
         assert request(path,kind='start',directory='/etc')['kind']=='error','Arbitrary path accepted'
         assert not marker.exists(),'Rejected command launched a worker'
-        session=pathlib.Path('/tmp/cg-'+str(uuid.uuid4()).upper());session.mkdir(mode=0o700)
+        session=pathlib.Path('/tmp/fb-'+str(uuid.uuid4()).upper());session.mkdir(mode=0o700)
         control=socket.socket(socket.AF_UNIX);control.bind(str(session/'control.sock'));os.chmod(session/'control.sock',0o600)
         try:
             assert request(path,kind='start',directory=str(session))['kind']=='ready'

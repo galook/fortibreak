@@ -17,7 +17,7 @@ import Darwin
     static func allowedSource(_ file:InstallFile,app:String) -> Bool {
         let source=sourcePath(file,app:app)
         let path=URL(fileURLWithPath:source).resolvingSymlinksInPath().path
-        if ["ClearGateDaemon","ClearGateHelper"].contains(file.name) {return source==app+"/Contents/MacOS/"+file.name && path==source}
+        if ["FortiBreakDaemon","FortiBreakHelper"].contains(file.name) {return source==app+"/Contents/MacOS/"+file.name && path==source}
         if file.name=="cert.pem" {return path=="/opt/homebrew/etc/ca-certificates/cert.pem"}
         let pattern:String
         if file.name=="openfortivpn" {pattern=#"^/opt/homebrew/Cellar/openfortivpn/[A-Za-z0-9._-]+/bin/openfortivpn$"#}
@@ -29,18 +29,18 @@ import Darwin
         let probe=Process(),output=Pipe()
         probe.executableURL=URL(fileURLWithPath:"/bin/ps");probe.arguments=["-axo","comm="];probe.standardOutput=output
         try probe.run();let running=String(decoding:output.fileHandleForReading.readDataToEndOfFile(),as:UTF8.self);probe.waitUntilExit()
-        guard !running.components(separatedBy:.newlines).contains(where:{$0.hasSuffix("/ClearGateHelper") || $0.hasSuffix("/openfortivpn")}) else {throw AppError("Disconnect the running VPN engine before "+action+" the helper.")}
+        guard !running.components(separatedBy:.newlines).contains(where:{$0.hasSuffix("/FortiBreakHelper") || $0.hasSuffix("/openfortivpn")}) else {throw AppError("Disconnect the running VPN engine before "+action+" the helper.")}
     }
     static func install(app:String,uid:UInt32) throws {
         guard geteuid()==0,uid>0 else {throw AppError("Administrator authorization is required for helper setup.")}
         let appURL=URL(fileURLWithPath:app).standardizedFileURL
         var appInfo=stat()
-        guard appURL.path==app,app.hasSuffix(".app"),lstat(app,&appInfo)==0,appInfo.st_uid==uid,(appInfo.st_mode&S_IFMT)==S_IFDIR else {throw AppError("Unexpected ClearGate application owner or location.")}
+        guard appURL.path==app,app.hasSuffix(".app"),lstat(app,&appInfo)==0,appInfo.st_uid==uid,(appInfo.st_mode&S_IFMT)==S_IFDIR else {throw AppError("Unexpected FortiBreak application owner or location.")}
         try requireIdleEngine("enabling or updating")
         let hash=try CodeIdentity.hash(of:app)
         let fm=FileManager.default
         let manifest=try JSONDecoder().decode(InstallManifest.self,from:Data(contentsOf:appURL.appendingPathComponent("Contents/Resources/HelperInstallManifest.json")))
-        let names=Set(["ClearGateDaemon","ClearGateHelper","openfortivpn","libssl.4.dylib","libcrypto.4.dylib","cert.pem"])
+        let names=Set(["FortiBreakDaemon","FortiBreakHelper","openfortivpn","libssl.4.dylib","libcrypto.4.dylib","cert.pem"])
         guard Set(manifest.files.map{$0.name})==names,manifest.files.count==names.count else {throw AppError("Helper setup manifest is incomplete.")}
         try TrustedFiles.directory("/Library")
         let parent=URL(fileURLWithPath:PrivilegedPaths.base).deletingLastPathComponent().path
@@ -49,14 +49,14 @@ import Darwin
         let lock=open(PrivilegedPaths.lock,O_CREAT|O_RDWR|O_NOFOLLOW,0o600)
         guard lock>=0 else {throw AppError("Cannot lock helper setup.")}
         defer {close(lock)}
-        guard flock(lock,LOCK_EX|LOCK_NB)==0 else {throw AppError("Disconnect ClearGate before updating its VPN helper.")}
-        let stage=parent+"/.cleargate-"+UUID().uuidString
+        guard flock(lock,LOCK_EX|LOCK_NB)==0 else {throw AppError("Disconnect FortiBreak before updating its VPN helper.")}
+        let stage=parent+"/.fortibreak-"+UUID().uuidString
         try fm.createDirectory(atPath:stage,withIntermediateDirectories:false,attributes:[.posixPermissions:0o700])
         defer {try? fm.removeItem(atPath:stage)}
         for file in manifest.files {
             guard allowedSource(file,app:app) else {throw AppError("Helper setup rejected an unexpected source path.")}
             let data=try Data(contentsOf:URL(fileURLWithPath:sourcePath(file,app:app)))
-            guard data.count<40_000_000,SHA256.hash(data:data).map({String(format:"%02x",$0)}).joined()==file.sha256 else {throw AppError("Helper setup files changed. Rebuild ClearGate before installing the helper.")}
+            guard data.count<40_000_000,SHA256.hash(data:data).map({String(format:"%02x",$0)}).joined()==file.sha256 else {throw AppError("Helper setup files changed. Rebuild FortiBreak before installing the helper.")}
             let path=stage+"/"+file.name
             try data.write(to:URL(fileURLWithPath:path),options:.atomic)
             chmod(path,file.name=="cert.pem" ? 0o644 : 0o755)
@@ -70,7 +70,7 @@ import Darwin
         for name in ["openfortivpn","libssl.4.dylib","libcrypto.4.dylib"] {
             try command("/usr/bin/codesign",["--force","--sign","-","--timestamp=none",stage+"/"+name])
         }
-        for name in ["ClearGateDaemon","ClearGateHelper","openfortivpn","libssl.4.dylib","libcrypto.4.dylib"] {
+        for name in ["FortiBreakDaemon","FortiBreakHelper","openfortivpn","libssl.4.dylib","libcrypto.4.dylib"] {
             try command("/usr/bin/codesign",["--verify","--strict",stage+"/"+name])
         }
         let configuration=HelperConfiguration(version:PrivilegedPaths.version,ownerUID:uid,appCDHash:hash)
@@ -78,7 +78,7 @@ import Darwin
         chmod(stage+"/configuration.json",0o644);chmod(stage,0o755)
         let plist:[String:Any]=["Label":PrivilegedPaths.label,"ProgramArguments":[PrivilegedPaths.daemon],"RunAtLoad":true,"KeepAlive":true,"ThrottleInterval":10,"ProcessType":"Interactive","UserName":"root","Umask":63]
         let plistData=try PropertyListSerialization.data(fromPropertyList:plist,format:.xml,options:0)
-        let backup=parent+"/.cleargate-backup-"+UUID().uuidString
+        let backup=parent+"/.fortibreak-backup-"+UUID().uuidString
         let previousPlist=try? Data(contentsOf:URL(fileURLWithPath:PrivilegedPaths.plist))
         let hadPrevious=fm.fileExists(atPath:PrivilegedPaths.base)
         if hadPrevious {try TrustedFiles.directory(PrivilegedPaths.base)}
@@ -118,7 +118,7 @@ import Darwin
             let lock=open(PrivilegedPaths.lock,O_RDWR|O_NOFOLLOW)
             guard lock>=0 else {throw AppError("Cannot lock the VPN helper for removal.")}
             defer {close(lock)}
-            guard flock(lock,LOCK_EX|LOCK_NB)==0 else {throw AppError("Disconnect ClearGate before removing its VPN helper.")}
+            guard flock(lock,LOCK_EX|LOCK_NB)==0 else {throw AppError("Disconnect FortiBreak before removing its VPN helper.")}
             try removeHelperFiles(fm)
             unlink(PrivilegedPaths.lock)
         } else {try removeHelperFiles(fm)}

@@ -16,7 +16,7 @@ final class BrokerServer {
             switch command.kind {
             case "ping":break
             case "start":
-                guard active?.isRunning != true else {throw AppError("A ClearGate VPN session is already running.")}
+                guard active?.isRunning != true else {throw AppError("A FortiBreak VPN session is already running.")}
                 try TrustedFiles.sessionDirectory(command.directory,uid:configuration.ownerUID)
                 let child=Process()
                 child.executableURL=URL(fileURLWithPath:worker)

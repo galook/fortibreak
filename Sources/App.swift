@@ -42,12 +42,12 @@ final class AppDelegate:NSObject,NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool{false}
 }
 
-@main struct ClearGateApp:App {
+@main struct FortiBreakApp:App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var profiles=ProfileStore(preview:CommandLine.arguments.contains("--preview"))
     @StateObject private var tunnel=TunnelManager()
     var body:some Scene{
-        Window("ClearGate",id:"main"){
+        Window("FortiBreak",id:"main"){
             MainView(store:profiles,tunnel:tunnel).frame(minWidth:780,minHeight:600)
                 .preferredColorScheme(CommandLine.arguments.contains("--preview-dark") ? .dark : nil).onAppear{delegate.tunnel=tunnel;NSApplication.shared.activate(ignoringOtherApps:true);tunnel.refreshHelperState();connectOnLaunch()}
         }
@@ -72,7 +72,7 @@ final class AppDelegate:NSObject,NSApplicationDelegate {
         guard !profiles.preview,!tunnel.busy,tunnel.helperReady,let id=UserDefaults.standard.string(forKey:"connectOnLaunch"),
               let p=profiles.profiles.first(where:{$0.id.uuidString==id}),p.unsupported==nil else{return}
         profiles.selected=p.id
-        tunnel.log("Connecting to \(p.name) because it is set to connect when ClearGate opens.")
+        tunnel.log("Connecting to \(p.name) because it is set to connect when FortiBreak opens.")
         tunnel.connect(p,password:CredentialStore.password(p.id),preview:false)
     }
 }
@@ -105,7 +105,7 @@ struct MainView:View {
                 if let result=imported{ImportPreview(result:result){save in do{try store.importItems(result.items,savePasswords:save);imported=nil;page=0}catch{self.error=error.localizedDescription}}}
             }
             .alert("Could Not Complete Action",isPresented:Binding(get:{error != nil || store.error != nil},set:{if !$0{error=nil;store.error=nil}})){Button("OK"){error=nil;store.error=nil}}message:{Text(error ?? store.error ?? "")}
-            .confirmationDialog("Delete this connection?",isPresented:Binding(get:{deleteTarget != nil},set:{if !$0{deleteTarget=nil}}),titleVisibility:.visible){Button("Delete",role:.destructive){if let p=deleteTarget{store.remove(p)};deleteTarget=nil};Button("Cancel",role:.cancel){deleteTarget=nil}}message:{Text("Its saved password in ClearGate’s Keychain is also removed. FortiClient is unaffected.")}
+            .confirmationDialog("Delete this connection?",isPresented:Binding(get:{deleteTarget != nil},set:{if !$0{deleteTarget=nil}}),titleVisibility:.visible){Button("Delete",role:.destructive){if let p=deleteTarget{store.remove(p)};deleteTarget=nil};Button("Cancel",role:.cancel){deleteTarget=nil}}message:{Text("Its saved password in FortiBreak’s Keychain is also removed. FortiClient is unaffected.")}
             .onReceive(NotificationCenter.default.publisher(for:.init("importProfiles"))){_ in importOpen=true}
             .onReceive(NotificationCenter.default.publisher(for:.init("newProfile"))){_ in editor=VPNProfile()}
             .onReceive(NotificationCenter.default.publisher(for:.init("showActivity"))){_ in page=1}
@@ -202,7 +202,7 @@ struct MainView:View {
                 hero(p,phase:phase)
                 if let reason=p.unsupported {Banner(symbol:"exclamationmark.triangle.fill",tint:.orange,title:"Import only",message:reason){EmptyView()}}
                 if !tunnel.helperReady || tunnel.helperSetupBusy {
-                    Banner(symbol:"lock.shield.fill",tint:.accentColor,title:tunnel.helperInstalled ? "Approve the VPN helper for this version" : "Enable the VPN helper",message:"A one-time macOS administrator prompt. ClearGate never sees your password."){
+                    Banner(symbol:"lock.shield.fill",tint:.accentColor,title:tunnel.helperInstalled ? "Approve the VPN helper for this version" : "Enable the VPN helper",message:"A one-time macOS administrator prompt. FortiBreak never sees your password."){
                         if tunnel.helperSetupBusy {ProgressView().controlSize(.small)}
                         else {Button(tunnel.helperInstalled ? "Approve…" : "Enable…"){tunnel.enableHelper(preview:store.preview)}.buttonStyle(.borderedProminent).controlSize(.large).disabled(tunnel.busy || store.preview)}
                     }
@@ -570,7 +570,7 @@ struct WelcomeView:View {
                 Image(nsImage:NSApplication.shared.applicationIconImage).resizable().frame(width:104,height:104)
                     .shadow(color:.black.opacity(0.18),radius:16,y:8)
                 VStack(spacing:8) {
-                    Text("Welcome to ClearGate").font(.system(size:34,weight:.bold,design:.rounded))
+                    Text("Welcome to FortiBreak").font(.system(size:34,weight:.bold,design:.rounded))
                     Text("Bring over your FortiClient connection in a few seconds.").font(.title3).foregroundStyle(.secondary)
                 }
                 HStack(alignment:.top,spacing:14) {
@@ -717,10 +717,10 @@ struct MenuPanel:View {
             Divider()
             VStack(alignment:.leading,spacing:2) {
                 Text("Connections").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal,10).padding(.top,8).padding(.bottom,2)
-                if ready.isEmpty {Text("No connections yet. Open ClearGate to add one.").font(.callout).foregroundStyle(.secondary).padding(10)}
+                if ready.isEmpty {Text("No connections yet. Open FortiBreak to add one.").font(.callout).foregroundStyle(.secondary).padding(10)}
                 ForEach(ready){p in PanelRow(profile:p,status:rowStatus(p),enabled:rowEnabled(p)){toggle(p)}}
                 if !ready.isEmpty && !tunnel.helperReady {
-                    Label("Approve the VPN helper in ClearGate to connect.",systemImage:"exclamationmark.shield.fill").font(.caption).foregroundStyle(.orange).padding(10)
+                    Label("Approve the VPN helper in FortiBreak to connect.",systemImage:"exclamationmark.shield.fill").font(.caption).foregroundStyle(.orange).padding(10)
                 }
             }.padding(6)
             Divider()
@@ -728,10 +728,10 @@ struct MenuPanel:View {
                 .toggleStyle(.switch).controlSize(.small).padding(.horizontal,16).padding(.vertical,10)
             Divider()
             HStack(spacing:14) {
-                Button{show()} label:{Label("Open ClearGate",systemImage:"macwindow")}
+                Button{show()} label:{Label("Open FortiBreak",systemImage:"macwindow")}
                 Spacer()
                 SettingsLink{Image(systemName:"gearshape")}.help("Settings")
-                Button{NSApplication.shared.terminate(nil)} label:{Image(systemName:"power")}.help("Quit ClearGate")
+                Button{NSApplication.shared.terminate(nil)} label:{Image(systemName:"power")}.help("Quit FortiBreak")
             }
             .buttonStyle(.borderless).padding(.horizontal,16).padding(.vertical,11)
         }
@@ -743,7 +743,7 @@ struct MenuPanel:View {
                 .symbolEffect(.pulse,isActive:phase == .working)
             VStack(alignment:.leading,spacing:2) {
                 Text(phase == .connected ? "Connected" : tunnel.busy ? tunnel.state.rawValue : phase == .failed ? "Connection failed" : "Not connected").font(.headline)
-                Text(tunnel.activeName ?? target?.name ?? "ClearGate").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                Text(tunnel.activeName ?? target?.name ?? "FortiBreak").font(.callout).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             Toggle("",isOn:Binding(get:{tunnel.busy},set:{on in if on,let p=target {connect(p)} else if !on {tunnel.disconnect()}}))
@@ -833,7 +833,7 @@ struct GeneralSettings:View {
         Form {
             Section {
                 Toggle("Reconnect automatically if the tunnel drops",isOn:$autoReconnect)
-                Picker("When ClearGate opens",selection:$connectOnLaunch){
+                Picker("When FortiBreak opens",selection:$connectOnLaunch){
                     Text("Don’t connect").tag("")
                     ForEach(store.profiles.filter{$0.unsupported == nil}){Text("Connect to "+$0.name).tag($0.id.uuidString)}
                 }
@@ -841,7 +841,7 @@ struct GeneralSettings:View {
                 Text("Up to \(ReconnectPolicy.delays.count) attempts after \(ReconnectPolicy.delays.map{"\(Int($0))"}.joined(separator:", ")) seconds, once a network is available. Browser SSO may open a sign-in tab. Disconnect cancels.").foregroundStyle(.secondary)
             }
             Section("App") {
-                Toggle("Open ClearGate at login",isOn:Binding(get:{openAtLogin},set:{setOpenAtLogin($0)}))
+                Toggle("Open FortiBreak at login",isOn:Binding(get:{openAtLogin},set:{setOpenAtLogin($0)}))
                 if let loginNote {Text(loginNote).font(.caption).foregroundStyle(.orange)}
                 Toggle("Notify when the VPN connects, drops or needs input",isOn:$notifications)
                     .onChange(of:notifications){_,on in if on {Notifier.requestPermission()}}
@@ -857,7 +857,7 @@ struct GeneralSettings:View {
     private func refreshLoginState() {
         let status=SMAppService.mainApp.status
         openAtLogin=status == .enabled || status == .requiresApproval
-        loginNote=status == .requiresApproval ? "Allow ClearGate in System Settings › General › Login Items." : nil
+        loginNote=status == .requiresApproval ? "Allow FortiBreak in System Settings › General › Login Items." : nil
     }
     private func setOpenAtLogin(_ on:Bool) {
         do {if on {try SMAppService.mainApp.register()} else {try SMAppService.mainApp.unregister()};refreshLoginState()}
@@ -884,13 +884,13 @@ struct HelperSettings:View {
                         .disabled(tunnel.busy || tunnel.helperSetupBusy || store.preview)
                 }
             } footer:{
-                Text("A root launchd service that only accepts this signed ClearGate build and your Mac user. Each new ClearGate build needs approval again. Removing it keeps your connections and saved passwords.").foregroundStyle(.secondary)
+                Text("A root launchd service that only accepts this signed FortiBreak build and your Mac user. Each new FortiBreak build needs approval again. Removing it keeps your connections and saved passwords.").foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped).frame(height:250)
         .confirmationDialog("Remove the VPN helper?",isPresented:$confirmRemove){
             Button("Remove Helper",role:.destructive){tunnel.removeHelper(preview:store.preview)}
-        } message:{Text("macOS asks for administrator approval. ClearGate can’t connect until the helper is approved again.")}
+        } message:{Text("macOS asks for administrator approval. FortiBreak can’t connect until the helper is approved again.")}
         .onAppear{tunnel.refreshHelperState()}
     }
 }

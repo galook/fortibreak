@@ -4,16 +4,16 @@ import CryptoKit
 import Darwin
 
 enum PrivilegedPaths {
-    static let label="eu.local.cleargate.vpn-helper"
-    static let base="/Library/PrivilegedHelperTools/eu.local.cleargate"
-    static let socket="/var/run/eu.local.cleargate.sock"
+    static let label="eu.local.fortibreak.vpn-helper"
+    static let base="/Library/PrivilegedHelperTools/eu.local.fortibreak"
+    static let socket="/var/run/eu.local.fortibreak.sock"
     static let plist="/Library/LaunchDaemons/"+label+".plist"
     static let configuration=base+"/configuration.json"
-    static let worker=base+"/ClearGateHelper"
-    static let daemon=base+"/ClearGateDaemon"
+    static let worker=base+"/FortiBreakHelper"
+    static let daemon=base+"/FortiBreakDaemon"
     static let engine=base+"/openfortivpn"
     static let certificates=base+"/cert.pem"
-    static let lock="/Library/PrivilegedHelperTools/eu.local.cleargate.session.lock"
+    static let lock="/Library/PrivilegedHelperTools/eu.local.fortibreak.session.lock"
     static let version=1
 }
 struct HelperConfiguration:Codable {
@@ -29,12 +29,12 @@ struct InstallManifest:Codable {let files:[InstallFile];let rewrites:[Dependency
 enum CodeIdentity {
     static func hash(of executableOrApp:String) throws -> String {
         var code:SecStaticCode?
-        guard SecStaticCodeCreateWithPath(URL(fileURLWithPath:executableOrApp) as CFURL,[],&code)==errSecSuccess,let code else {throw AppError("Cannot inspect ClearGate signature.")}
-        guard SecStaticCodeCheckValidity(code,SecCSFlags(rawValue:kSecCSStrictValidate),nil)==errSecSuccess else {throw AppError("ClearGate signature is invalid. Reinstall the app.")}
+        guard SecStaticCodeCreateWithPath(URL(fileURLWithPath:executableOrApp) as CFURL,[],&code)==errSecSuccess,let code else {throw AppError("Cannot inspect FortiBreak signature.")}
+        guard SecStaticCodeCheckValidity(code,SecCSFlags(rawValue:kSecCSStrictValidate),nil)==errSecSuccess else {throw AppError("FortiBreak signature is invalid. Reinstall the app.")}
         var information:CFDictionary?
         guard SecCodeCopySigningInformation(code,SecCSFlags(rawValue:kSecCSSigningInformation),&information)==errSecSuccess,
-              let dictionary=information as? [String:Any],let digest=dictionary[kSecCodeInfoUnique as String] as? Data else {throw AppError("ClearGate signing identity is unavailable.")}
-        guard let flags=dictionary[kSecCodeInfoFlags as String] as? NSNumber,flags.uint32Value & 0x10000 != 0 else {throw AppError("ClearGate requires its hardened runtime signature. Rebuild the app before helper setup.")}
+              let dictionary=information as? [String:Any],let digest=dictionary[kSecCodeInfoUnique as String] as? Data else {throw AppError("FortiBreak signing identity is unavailable.")}
+        guard let flags=dictionary[kSecCodeInfoFlags as String] as? NSNumber,flags.uint32Value & 0x10000 != 0 else {throw AppError("FortiBreak requires its hardened runtime signature. Rebuild the app before helper setup.")}
         return digest.map{String(format:"%02x",$0)}.joined()
     }
     static func authorize(peer fd:Int32,uid:UInt32,hash:String) throws {
@@ -51,7 +51,7 @@ enum CodeIdentity {
         var requirement:SecRequirement?
         let rule="cdhash H\""+hash+"\""
         guard SecRequirementCreateWithString(rule as CFString,[],&requirement)==errSecSuccess,
-              SecCodeCheckValidity(guest,SecCSFlags(rawValue:kSecCSStrictValidate),requirement)==errSecSuccess else {throw AppError("VPN helper accepts only the approved ClearGate build. Enable the helper again after updating the app.")}
+              SecCodeCheckValidity(guest,SecCSFlags(rawValue:kSecCSStrictValidate),requirement)==errSecSuccess else {throw AppError("VPN helper accepts only the approved FortiBreak build. Enable the helper again after updating the app.")}
     }
 }
 
@@ -74,10 +74,10 @@ enum TrustedFiles {
     }
     static func runtime() throws {
         try directory(PrivilegedPaths.base)
-        for file in ["ClearGateHelper","ClearGateDaemon","openfortivpn","libssl.4.dylib","libcrypto.4.dylib","cert.pem"] {try regular(PrivilegedPaths.base+"/"+file)}
+        for file in ["FortiBreakHelper","FortiBreakDaemon","openfortivpn","libssl.4.dylib","libcrypto.4.dylib","cert.pem"] {try regular(PrivilegedPaths.base+"/"+file)}
     }
     static func sessionDirectory(_ path:String,uid:UInt32) throws {
-        guard path.hasPrefix("/tmp/cg-"),UUID(uuidString:String(path.dropFirst("/tmp/cg-".count))) != nil else {throw AppError("Invalid VPN session directory.")}
+        guard path.hasPrefix("/tmp/fb-"),UUID(uuidString:String(path.dropFirst("/tmp/fb-".count))) != nil else {throw AppError("Invalid VPN session directory.")}
         var info=stat(),socketInfo=stat()
         guard lstat(path,&info)==0,(info.st_mode&S_IFMT)==S_IFDIR,info.st_uid==uid,(info.st_mode&0o077)==0,
               lstat(path+"/control.sock",&socketInfo)==0,(socketInfo.st_mode&S_IFMT)==S_IFSOCK,socketInfo.st_uid==uid,(socketInfo.st_mode&0o077)==0 else {throw AppError("VPN session channel is not private.")}

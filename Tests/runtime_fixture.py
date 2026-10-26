@@ -3,7 +3,7 @@
 import pathlib,tempfile,subprocess,json,os,sys,hashlib
 app=pathlib.Path(sys.argv[1]).resolve()
 manifest=json.loads((app/'Contents/Resources/HelperInstallManifest.json').read_text())
-with tempfile.TemporaryDirectory(prefix='cg-runtime-') as tmp:
+with tempfile.TemporaryDirectory(prefix='fb-runtime-') as tmp:
  base=pathlib.Path(tmp)
  for item in manifest['files']:
   source=str(app)+item['source'][4:] if item['source'].startswith('@app/') else item['source']
@@ -20,8 +20,8 @@ with tempfile.TemporaryDirectory(prefix='cg-runtime-') as tmp:
  loaded=[line for line in result.stderr.splitlines() if 'libssl.4.dylib' in line or 'libcrypto.4.dylib' in line]
  assert loaded and all(tmp in line for line in loaded),loaded
  assert os.geteuid()!=0,'This fixture must run unprivileged'
- result=subprocess.run([str(app/'Contents/MacOS/ClearGateInstaller'),str(app),str(os.getuid())],capture_output=True,text=True)
+ result=subprocess.run([str(app/'Contents/MacOS/FortiBreakInstaller'),str(app),str(os.getuid())],capture_output=True,text=True)
  assert result.returncode!=0 and 'Administrator authorization' in result.stderr
- result=subprocess.run([str(app/'Contents/MacOS/ClearGateInstaller'),'--uninstall'],capture_output=True,text=True)
+ result=subprocess.run([str(app/'Contents/MacOS/FortiBreakInstaller'),'--uninstall'],capture_output=True,text=True)
  assert result.returncode!=0 and 'Administrator authorization' in result.stderr
  print('Passed isolated OpenSSL runtime relocation/hash checks and unprivileged install/uninstall rejection. No system installation or VPN connection.')

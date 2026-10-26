@@ -1,10 +1,10 @@
 import Foundation
 import Darwin
 
-@_silgen_name("cg_spawn") private func cg_spawn(_ args: UnsafePointer<UnsafeMutablePointer<CChar>?>!, _ master: UnsafeMutablePointer<Int32>!) -> Int32
-@_silgen_name("cg_wait") private func cg_wait(_ pid: Int32, _ code: UnsafeMutablePointer<Int32>!) -> Int32
-@_silgen_name("cg_signal") private func cg_signal(_ pid: Int32, _ signal: Int32)
-@_silgen_name("cg_signal_engine") private func cg_signal_engine(_ pid: Int32, _ signal: Int32)
+@_silgen_name("fb_spawn") private func fb_spawn(_ args: UnsafePointer<UnsafeMutablePointer<CChar>?>!, _ master: UnsafeMutablePointer<Int32>!) -> Int32
+@_silgen_name("fb_wait") private func fb_wait(_ pid: Int32, _ code: UnsafeMutablePointer<Int32>!) -> Int32
+@_silgen_name("fb_signal") private func fb_signal(_ pid: Int32, _ signal: Int32)
+@_silgen_name("fb_signal_engine") private func fb_signal_engine(_ pid: Int32, _ signal: Int32)
 
 @main struct HelperMain {
     static func main() {
@@ -55,7 +55,7 @@ import Darwin
         var argv = ([executable] + arguments).map { strdup($0) }; argv.append(nil)
         defer { argv.forEach { if let p = $0 { free(p) } } }
         var master: Int32 = -1
-        let pid = argv.withUnsafeBufferPointer { cg_spawn($0.baseAddress, &master) }
+        let pid = argv.withUnsafeBufferPointer { fb_spawn($0.baseAddress, &master) }
         guard pid > 0 else { event("error","Could not start VPN backend."); return }
         defer { close(master) }
         event("started")
@@ -77,7 +77,7 @@ import Darwin
             if let range = clean.range(of:"ppp[0-9]+",options:.regularExpression) { event("interface",String(clean[range])) }
             if request.profile.login == .browser {
                 if clean.contains("Listening for SAML login on port \(BrowserSSO.callbackPort)") {samlListening=true}
-                if clean.contains("Failed to bind socket to port") {exitDetail="Browser callback port 8020 is busy. Cancel FortiClient sign-in and retry ClearGate."}
+                if clean.contains("Failed to bind socket to port") {exitDetail="Browser callback port 8020 is busy. Cancel FortiClient sign-in and retry FortiBreak."}
                 if clean.contains("Finally failed to retrieve SAML authentication token") {exitDetail="Browser sign-in timed out. Press Connect and finish sign-in within about 50 seconds."}
                 if samlListening, !browserOpened, let url=BrowserSSO.loginURL(in:text,profile:request.profile) {
                     browserOpened=true
@@ -87,7 +87,7 @@ import Darwin
         }
         while true {
             var code: Int32 = 0
-            if cg_wait(pid,&code) == 1 {
+            if fb_wait(pid,&code) == 1 {
                 // Drain trailing engine diagnostics before emitting its exit status.
                 var bytes=[UInt8](repeating:0,count:8192)
                 while true {
@@ -104,28 +104,28 @@ import Darwin
             if let since = stopAt {
                 let elapsed = Date().timeIntervalSince(since)
                 if elapsed > 45 && !killed {
-                    killed=true;event("log","VPN engine did not finish cleanup within 45 seconds. Forcing its process group to stop.");cg_signal(pid,SIGKILL)
+                    killed=true;event("log","VPN engine did not finish cleanup within 45 seconds. Forcing its process group to stop.");fb_signal(pid,SIGKILL)
                 } else if elapsed > 30 && !terminated {
-                    terminated=true;event("log","VPN cleanup is taking longer than expected. Asking the engine to terminate.");cg_signal_engine(pid,SIGTERM)
+                    terminated=true;event("log","VPN cleanup is taking longer than expected. Asking the engine to terminate.");fb_signal_engine(pid,SIGTERM)
                 }
             }
             var fds = [pollfd(fd:master,events:Int16(POLLIN),revents:0),pollfd(fd:eof ? -1 : fd,events:Int16(POLLIN),revents:0)]
             let n = poll(&fds,2,250)
-            if n < 0 { if errno == EINTR { continue }; if stopAt == nil { stopAt=Date();cg_signal_engine(pid,SIGINT) }; continue }
+            if n < 0 { if errno == EINTR { continue }; if stopAt == nil { stopAt=Date();fb_signal_engine(pid,SIGINT) }; continue }
             if fds[1].revents & Int16(POLLIN | POLLHUP | POLLERR) != 0 {
                 var bytes = [UInt8](repeating:0,count:4096)
                 let got = read(fd,&bytes,bytes.count)
-                if got <= 0 { eof = true; if stopAt == nil { stopAt=Date();cg_signal_engine(pid,SIGINT) } }
+                if got <= 0 { eof = true; if stopAt == nil { stopAt=Date();fb_signal_engine(pid,SIGINT) } }
                 else {
                     input.append(contentsOf:bytes.prefix(got))
                     while let end = input.firstIndex(of:10) {
                         let line = input.prefix(upTo:end); input.removeSubrange(...end)
                         if let command = try? JSONDecoder().decode(WireMessage.self,from:line) {
-                            if command.kind == "stop", stopAt == nil { stopAt=Date();cg_signal_engine(pid,SIGINT) }
+                            if command.kind == "stop", stopAt == nil { stopAt=Date();fb_signal_engine(pid,SIGINT) }
                             if command.kind == "input", command.text.utf8.count < 4096 { sendInput(command.text) }
                         }
                     }
-                    if input.count > 8192 { input.removeAll(); if stopAt == nil { stopAt=Date();cg_signal_engine(pid,SIGINT) } }
+                    if input.count > 8192 { input.removeAll(); if stopAt == nil { stopAt=Date();fb_signal_engine(pid,SIGINT) } }
                 }
             }
             if fds[0].revents & Int16(POLLIN) != 0 {

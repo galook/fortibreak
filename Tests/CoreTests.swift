@@ -64,7 +64,7 @@ import Darwin
         let browserArgs=try Backend.arguments(ConnectRequest(profile:browser,password:""))
         check(browserArgs.contains("--saml-login=8020"),"Browser listener uses the gateway's fixed callback port")
         do{_ = try Backend.arguments(ConnectRequest(profile:browser,password:"",samlPort:49152));check(false,"Random callback ports rejected")}catch{check(true,"Random callback ports rejected")}
-        let directory="/tmp/cg-test-"+UUID().uuidString
+        let directory="/tmp/fb-test-"+UUID().uuidString
         try FileManager.default.createDirectory(atPath:directory,withIntermediateDirectories:false,attributes:[.posixPermissions:0o700])
         defer{try? FileManager.default.removeItem(atPath:directory)}
         let path=directory+"/control.sock",server=try UnixSocket.create(path,server:true)
