@@ -242,7 +242,7 @@ private final class SessionChannel: @unchecked Sendable {
         NSApplication.shared.activate(ignoringOtherApps:true)
         if let showWindow {showWindow()} else {NSApplication.shared.windows.first(where:{$0.canBecomeMain})?.makeKeyAndOrderFront(nil)}
     }
-    var backendReady: Bool { Backend.executable != nil || FileManager.default.isExecutableFile(atPath:PrivilegedPaths.engine) }
+    var backendReady: Bool { Backend.executable != nil || FileManager.default.isExecutableFile(atPath:PrivilegedPaths.engine) || FileManager.default.isExecutableFile(atPath:Bundle.main.bundlePath+"/Contents/Helpers/openfortivpn") }
     var elapsed: String {
         guard let start=connectedAt else{return "—"}
         let t=max(0,Int(clock.timeIntervalSince(start)))
@@ -278,7 +278,7 @@ private final class SessionChannel: @unchecked Sendable {
             let request=ConnectRequest(profile:profile,password:password)
             if profile.login == .browser {try BrowserSSO.checkCallbackAvailable()}
             _=try Backend.arguments(request)
-            guard backendReady else{throw AppError("VPN backend is missing. Install openfortivpn with Homebrew.")}
+            guard backendReady else{throw AppError("VPN engine is missing from this build. Reinstall FortiBreak.")}
             refreshHelperState()
             guard helperReady,!helperSetupBusy else {throw AppError("Enable the VPN helper once before connecting.")}
             let directory="/tmp/fb-"+UUID().uuidString

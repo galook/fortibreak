@@ -23,8 +23,7 @@ struct HelperConfiguration:Codable {
 }
 struct BrokerCommand:Codable {let kind:String;var directory:String=""}
 struct InstallFile:Codable {let source:String;let name:String;let sha256:String}
-struct DependencyRewrite:Codable {let name:String;let from:String;let to:String}
-struct InstallManifest:Codable {let files:[InstallFile];let rewrites:[DependencyRewrite]}
+struct InstallManifest:Codable {let files:[InstallFile]}
 
 enum CodeIdentity {
     static func hash(of executableOrApp:String) throws -> String {

@@ -14,16 +14,12 @@ import Darwin
     static func sourcePath(_ file:InstallFile,app:String) -> String {
         file.source.hasPrefix("@app/") ? app+String(file.source.dropFirst(4)) : file.source
     }
+    // Every runtime file comes from the signed app bundle; the engine and OpenSSL are relocated at build time.
+    static let bundled=["FortiBreakDaemon":"/Contents/MacOS/","FortiBreakHelper":"/Contents/MacOS/","openfortivpn":"/Contents/Helpers/","libssl.4.dylib":"/Contents/Helpers/","libcrypto.4.dylib":"/Contents/Helpers/","cert.pem":"/Contents/Resources/"]
     static func allowedSource(_ file:InstallFile,app:String) -> Bool {
+        guard let folder=bundled[file.name] else {return false}
         let source=sourcePath(file,app:app)
-        let path=URL(fileURLWithPath:source).resolvingSymlinksInPath().path
-        if ["FortiBreakDaemon","FortiBreakHelper"].contains(file.name) {return source==app+"/Contents/MacOS/"+file.name && path==source}
-        if file.name=="cert.pem" {return path=="/opt/homebrew/etc/ca-certificates/cert.pem"}
-        let pattern:String
-        if file.name=="openfortivpn" {pattern=#"^/opt/homebrew/Cellar/openfortivpn/[A-Za-z0-9._-]+/bin/openfortivpn$"#}
-        else if ["libssl.4.dylib","libcrypto.4.dylib"].contains(file.name) {pattern=#"^/opt/homebrew/Cellar/openssl@4/[A-Za-z0-9._-]+/lib/"#+NSRegularExpression.escapedPattern(for:file.name)+"$"}
-        else {return false}
-        return path.range(of:pattern,options:.regularExpression) != nil
+        return source==app+folder+file.name && URL(fileURLWithPath:source).resolvingSymlinksInPath().path==source
     }
     static func requireIdleEngine(_ action:String) throws {
         let probe=Process(),output=Pipe()
@@ -60,15 +56,6 @@ import Darwin
             let path=stage+"/"+file.name
             try data.write(to:URL(fileURLWithPath:path),options:.atomic)
             chmod(path,file.name=="cert.pem" ? 0o644 : 0o755)
-        }
-        for rewrite in manifest.rewrites {
-            guard ["openfortivpn","libssl.4.dylib","libcrypto.4.dylib"].contains(rewrite.name),
-                  rewrite.from.hasPrefix("/opt/homebrew/"),
-                  ["@loader_path/libssl.4.dylib","@loader_path/libcrypto.4.dylib"].contains(rewrite.to) else {throw AppError("Unexpected helper library rewrite.")}
-            try command("/usr/bin/install_name_tool",["-change",rewrite.from,rewrite.to,stage+"/"+rewrite.name])
-        }
-        for name in ["openfortivpn","libssl.4.dylib","libcrypto.4.dylib"] {
-            try command("/usr/bin/codesign",["--force","--sign","-","--timestamp=none",stage+"/"+name])
         }
         for name in ["FortiBreakDaemon","FortiBreakHelper","openfortivpn","libssl.4.dylib","libcrypto.4.dylib"] {
             try command("/usr/bin/codesign",["--verify","--strict",stage+"/"+name])

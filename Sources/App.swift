@@ -848,7 +848,7 @@ struct GeneralSettings:View {
             }
             Section {
                 LabeledContent("Version",value:Design.version)
-                LabeledContent("VPN engine",value:tunnel.backendReady ? "openfortivpn" : "Missing. Install openfortivpn with Homebrew.")
+                LabeledContent("VPN engine",value:tunnel.backendReady ? "openfortivpn" : "Missing from this build. Reinstall FortiBreak.")
             }
         }
         .formStyle(.grouped).frame(height:400)
