@@ -3,6 +3,14 @@
 Each release on GitHub uses the section below that matches its tag (`vX.Y.Z` → `## [X.Y.Z]`).
 Add a section here before pushing a new tag.
 
+## [0.5.1] - 2026-10-26
+
+### Changed
+- Browser SSO no longer leaves your browser in front. When sign-in completes, FortiBreak switches
+  you back to the app you were using. If your browser still remembers your company login, this
+  happens within about a second. If it asks you to sign in, it stays in front until you finish.
+  Chrome still shows briefly, because it brings itself forward whenever it opens a link.
+
 ## [0.5.0] - 2026-10-26
 
 ### Added

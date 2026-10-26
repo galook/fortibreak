@@ -280,6 +280,8 @@ private final class SessionChannel: @unchecked Sendable {
     private var endReason: SessionEnd?
     private var currentEntry: UUID?
     private var automaticStart = false
+    // The app you were in when browser sign-in opened, and the browser it opened in.
+    private var signInReturn: (app: NSRunningApplication, browser: URL)?
     private var resumeWork: DispatchWorkItem?
     private var expiryWork: DispatchWorkItem?
     private var healthTimer: Timer?
@@ -455,7 +457,7 @@ private final class SessionChannel: @unchecked Sendable {
     private func receive(_ event:WireMessage,token:UUID) {
         guard channel?.token==token else{return}
         switch event.kind {
-        case "log":log(event.text);absorb(event.text)
+        case "log":log(event.text);absorb(event.text);if event.text.contains("Processing HTTP SAML request") {returnFromSignIn()}
         case "started":log("VPN engine started. Certificate verification is enabled.")
         case "connected":
             guard !stopRequested else{return}
@@ -479,11 +481,20 @@ private final class SessionChannel: @unchecked Sendable {
             if !NSApplication.shared.isActive {Notifier.post("FortiBreak needs you",event.text+".");bringForward()}
         case "browser":
             guard !stopRequested,let url=URL(string:event.text),url.scheme=="https" else{return}
-            NSWorkspace.shared.open(url);statusDetail="Complete browser sign-in within about 50 seconds. Return here after login.";log("Browser sign-in opened. Callback is 127.0.0.1:8020; listener waits up to about 50 seconds. Session tokens are omitted from logs.")
+            // Chrome comes forward even when asked to open in the background, so focus goes back once sign-in completes.
+            if let front=NSWorkspace.shared.frontmostApplication,let browser=NSWorkspace.shared.urlForApplication(toOpen:url),front.bundleURL != browser {signInReturn=(front,browser)} else {signInReturn=nil}
+            NSWorkspace.shared.open(url);statusDetail="Signing in through your browser. If it asks for your login, finish within about 50 seconds.";log("Browser sign-in opened. Callback is 127.0.0.1:8020; listener waits up to about 50 seconds. Session tokens are omitted from logs.")
         case "error":finish(code:1,detail:event.text)
         case "exit":finish(code:event.code ?? 1,detail:event.text.isEmpty ? nil : event.text)
         default:break
         }
+    }
+    // Skipped when you have already left the browser yourself.
+    private func returnFromSignIn() {
+        guard let target=signInReturn else{return}
+        signInReturn=nil
+        guard NSWorkspace.shared.frontmostApplication?.bundleURL==target.browser,!target.app.isTerminated else{return}
+        target.app.activate(options:[])
     }
     func respond(_ text:String){guard let fd=channel?.client,fd>=0 else{return};do{try UnixSocket.send(WireMessage(kind:"input",text:text),fd:fd);prompt=nil;state = .connecting;statusDetail="Checking authentication response…"}catch{finish(code:1,detail:error.localizedDescription)}}
     func disconnect() {
@@ -612,7 +623,7 @@ private final class SessionChannel: @unchecked Sendable {
     }
     private func finish(code:Int32,detail:String?=nil) {
         let wasStopped=stopRequested,wasConnected=connectedAt != nil
-        timer?.invalidate();timer=nil;prompt=nil;connectedAt=nil
+        timer?.invalidate();timer=nil;prompt=nil;connectedAt=nil;signInReturn=nil
         reconnectWork?.cancel();reconnectWork=nil
         stopHealth();expiryWork?.cancel();expiryWork=nil;sessionEndsAt=nil;expiryWarning=false
         if let session=channel {
@@ -712,7 +723,7 @@ private final class SessionChannel: @unchecked Sendable {
         sessionEndsAt=connectedAt?.addingTimeInterval(8*3_600)
         if CommandLine.arguments.contains("--preview-expiring") {sessionEndsAt=Date().addingTimeInterval(540);expiryWarning=true}
         if CommandLine.arguments.contains("--preview-paused") {state = .paused;pausedUntil=Date().addingTimeInterval(1_500);statusDetail="Paused until "+pausedUntil!.formatted(date:.omitted,time:.shortened)+". The VPN resumes automatically.";connectedAt=nil;return}
-        if CommandLine.arguments.contains("--preview-connecting") {state = .connecting;statusDetail="Complete browser sign-in within about 50 seconds.";connectedAt=nil;return}
+        if CommandLine.arguments.contains("--preview-connecting") {state = .connecting;statusDetail="Signing in through your browser. If it asks for your login, finish within about 50 seconds.";connectedAt=nil;return}
         history=(0..<60).map{i in let t=Double(i);return ThroughputSample(time:Date().addingTimeInterval(t-60),down:max(4_000,150_000+80_000*sin(t/6)+40_000*sin(t/2.3)+(i>40 ? 90_000 : 0)),up:max(1_000,22_000+12_000*sin(t/4)+6_000*cos(t/1.7)))}
     }
     private func resetCounters(){health=[];quality = .measuring;healthTarget="";dnsServers=[];searchDomains=[];routes=[];history=[];baseline=nil;lastTotals=nil;interfaceName="—";vpnAddress="—";received=0;sent=0;receiveRate=0;sendRate=0}

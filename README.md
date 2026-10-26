@@ -20,6 +20,7 @@ FortiBreak is an independent project. It is not made by, affiliated with or endo
 
 Disconnect FortiClient before you connect with FortiBreak. With browser SSO, finish sign-in within
 about 50 seconds; after a timeout, press Connect again instead of reusing an old callback URL.
+When sign-in completes, FortiBreak switches you back from the browser to the app you were using.
 
 Each new FortiBreak build needs the helper approved again.
 
