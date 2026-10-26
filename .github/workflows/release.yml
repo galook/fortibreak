@@ -1,0 +1,99 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    # The bundled Homebrew engine sets the app's minimum macOS, so build on the oldest supported runner.
+    runs-on: macos-15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      package: ${{ steps.version.outputs.package }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use the newest Xcode
+        run: echo "DEVELOPER_DIR=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)/Contents/Developer" >> "$GITHUB_ENV"
+
+      - name: Install openfortivpn
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_CLEANUP: '1'
+        run: brew install openfortivpn
+
+      - name: Pick version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            package="FortiBreak-$version"
+          else
+            last="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
+            version="${last#v}"
+            package="FortiBreak-$version-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        env:
+          FORTIBREAK_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          swiftc --version
+          ./build.sh build/FortiBreak.app
+
+      - name: Package
+        env:
+          PACKAGE: ${{ steps.version.outputs.package }}
+        run: |
+          mkdir dist
+          ditto -c -k --sequesterRsrc --keepParent build/FortiBreak.app "dist/$PACKAGE.zip"
+          (cd dist && shasum -a 256 "$PACKAGE.zip" > "$PACKAGE.zip.sha256")
+          plutil -extract LSMinimumSystemVersion raw build/FortiBreak.app/Contents/Info.plist > dist/minimum-macos.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.package }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.package }}
+          path: dist
+
+      - name: Write release notes
+        run: scripts/release_notes.sh "${{ needs.build.outputs.version }}" "$(cat dist/minimum-macos.txt)" > dist/notes.md
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ needs.build.outputs.package }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "dist/$PACKAGE.zip" "dist/$PACKAGE.zip.sha256" \
+            --verify-tag --title "FortiBreak ${{ needs.build.outputs.version }}" --notes-file dist/notes.md
