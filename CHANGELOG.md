@@ -3,6 +3,32 @@
 Each release on GitHub uses the section below that matches its tag (`vX.Y.Z` → `## [X.Y.Z]`).
 Add a section here before pushing a new tag.
 
+## [0.5.0] - 2026-10-26
+
+### Added
+- **Pause** the VPN for 15 minutes to 2 hours from the window, the menu bar panel or a link.
+  It reconnects on its own when the pause ends.
+- **Tunnel health monitor.** While connected, FortiBreak checks the gateway's DNS server (or a host
+  you set) every 5 seconds and shows latency, loss and a quality badge (Good, Slow, Stalled).
+  A tunnel that stops answering for about 20 seconds is restarted through automatic reconnect.
+- **History** page: past sessions with duration, data and how each ended, plus this week's
+  connected time, data and drops.
+- **Session-limit warning.** FortiBreak learns the gateway's session limit from drops at the same
+  length, or you set it per connection. It warns 10 minutes before the end, and **Sign In Again**
+  starts a fresh session at a moment you choose.
+- **Network** page: the routes that go through the tunnel, the gateway's DNS servers and search
+  domains, and a reachability test that shows whether a host:port answers through the VPN.
+- **Wi-Fi rules** (Settings › Wi-Fi): connect on untrusted Wi-Fi, never on trusted networks, and
+  optionally disconnect when you join one. macOS asks for Location access to reveal Wi-Fi names.
+- **Global shortcut** (default ⌃⌥⌘V) with an on-screen confirmation, and `fortibreak://` links
+  (`connect`, `disconnect`, `toggle`, `pause?minutes=`, `resume`, `open`) for Shortcuts and scripts.
+- **After-connect actions** per connection: open web pages or file shares, and run your own
+  script as you, with the VPN address and interface in its environment.
+
+### Changed
+- FortiBreak connects the favorite connection (the starred one, or your only one) when it opens.
+  Choose another connection or turn it off in Settings › General.
+
 ## [0.4.0] - 2026-10-26
 
 ### Changed

@@ -25,19 +25,46 @@ Each new FortiBreak build needs the helper approved again.
 
 ## Features
 
-- **Connect and reconnect.** A large power button, Cmd-K, or the menu bar panel. If a tunnel drops
-  without you pressing Disconnect, FortiBreak retries up to 3 times after 5, 15 and 45 seconds and
-  waits for a network first. A failed first sign-in never loops.
+- **Connect and reconnect.** A large power button, Cmd-K, the menu bar panel, a global shortcut
+  (default ⌃⌥⌘V) or a `fortibreak://` link. FortiBreak connects your favorite connection when it
+  opens. If a tunnel drops without you pressing Disconnect, it retries up to 3 times after 5, 15
+  and 45 seconds and waits for a network first. A failed first sign-in never loops.
+- **Pause** for 15 minutes to 2 hours; the VPN reconnects on its own afterwards.
+- **Tunnel health:** latency, loss and a quality badge from a check every 5 seconds. A tunnel that
+  stops answering for about 20 seconds is restarted.
+- **Session limit:** learned from drops or set per connection, with a warning 10 minutes before
+  the gateway ends the session and a one-click **Sign In Again**.
 - **While connected:** session time, VPN address, live download/upload speeds and chart, gateway
   and sign-in details.
+- **Network:** routes through the tunnel, gateway DNS servers and search domains, and a
+  reachability test for any host:port.
+- **History:** past sessions, weekly connected time, data used and drops.
 - **Activity (Cmd-L):** a log of each session with network snapshots, filter, Check Network, Copy
   and Clear.
-- **Settings (Cmd-,):** reconnect, connect a chosen profile on launch, open at login,
-  notifications, and VPN helper Approve, Repair and Remove.
-- **Notifications** when the VPN connects, drops, reconnects, gives up or needs a password or code.
+- **Wi-Fi rules:** connect on untrusted Wi-Fi, never on trusted networks, optionally disconnect
+  there. macOS asks for Location access to reveal Wi-Fi names.
+- **After connecting:** open web pages or file shares, and run your own script.
+- **Settings (Cmd-,):** reconnect, the connection to open on launch, open at login, notifications,
+  Wi-Fi rules, the global shortcut, `fortibreak://` links, and VPN helper Approve, Repair and Remove.
+- **Notifications** when the VPN connects, drops, reconnects, pauses, nears its session limit or
+  needs a password or code.
 - **Design preview:** launch with `--preview`, optionally adding `--preview-connected`,
-  `--preview-connecting`, `--preview-activity`, `--preview-empty` or `--preview-dark`. Preview
+  `--preview-connecting`, `--preview-paused`, `--preview-expiring`, `--preview-network`,
+  `--preview-history`, `--preview-activity`, `--preview-empty` or `--preview-dark`. Preview
   shows sample data only and never connects.
+
+### Links
+
+| Link | Does |
+|---|---|
+| `fortibreak://connect` | Connect the favorite (`?profile=Name` picks another) |
+| `fortibreak://disconnect` | Disconnect, or cancel a pause or reconnect |
+| `fortibreak://toggle` | Connect or disconnect |
+| `fortibreak://pause?minutes=30` | Pause for 1 to 480 minutes |
+| `fortibreak://resume` | End a pause now |
+| `fortibreak://open` | Show the window |
+
+Browsers ask before opening these links. Turn them off in Settings › Shortcuts.
 
 ## Connection support
 
