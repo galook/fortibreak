@@ -13,26 +13,38 @@ enum Design {
     private static let byteFormatter:ByteCountFormatter={let f=ByteCountFormatter();f.countStyle = .binary;f.allowsNonnumericFormatting=false;return f}()
     static func bytes(_ n:UInt64)->String{byteFormatter.string(fromByteCount:Int64(n))}
     static var version:String{Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "dev"}
-    static func lastSession(_ id:UUID)->(when:String,detail:String)? {
-        guard let record=SessionHistory.last(id) else{return nil}
-        let when=record.start.formatted(.relative(presentation:.named)).capitalizedFirst
-        guard let end=record.end else{return (when,"Still connected")}
-        let minutes=max(1,Int(end.timeIntervalSince(record.start)/60))
-        return (when,"for "+(minutes>=60 ? "\(minutes/60) h \(minutes%60) min" : "\(minutes) min"))
+    static func lastSession(_ entry:SessionEntry?)->(when:String,detail:String)? {
+        guard let entry else{return nil}
+        let when=entry.start.formatted(.relative(presentation:.named)).capitalizedFirst
+        return entry.end == nil ? (when,"Still connected") : (when,"for "+duration(entry.duration()))
+    }
+    static func duration(_ seconds:TimeInterval)->String {
+        let minutes=max(seconds>0 ? 1 : 0,Int(seconds/60))
+        return minutes>=60 ? "\(minutes/60) h \(minutes%60) min" : "\(minutes) min"
+    }
+    static func quality(_ quality:TunnelQuality)->(symbol:String,color:Color) {
+        switch quality {
+        case .good:("checkmark.circle.fill",.green)
+        case .slow:("tortoise.fill",.orange)
+        case .stalled:("exclamationmark.octagon.fill",.red)
+        case .measuring:("ellipsis.circle",.secondary)
+        case .unavailable:("questionmark.circle",.secondary)
+        }
     }
 }
 extension String {var capitalizedFirst:String{prefix(1).uppercased()+dropFirst()}}
 
 // One visual language for every state: tint, glyph and wording.
 enum Phase:Equatable {
-    case idle,unavailable,working,connected,failed
-    var tint:Color{switch self{case .connected:.green;case .working:.orange;case .failed:.red;case .unavailable:.gray;case .idle:.accentColor}}
+    case idle,unavailable,working,connected,paused,failed
+    var tint:Color{switch self{case .connected:.green;case .working:.orange;case .paused:.purple;case .failed:.red;case .unavailable:.gray;case .idle:.accentColor}}
 }
 
 final class AppDelegate:NSObject,NSApplicationDelegate {
     weak var tunnel:TunnelManager?
     var launchHandled=false
-    func applicationDidFinishLaunching(_ notification:Notification){Notifier.requestPermission()}
+    func applicationWillFinishLaunching(_ notification:Notification){LinkReceiver.shared.register()}
+    func applicationDidFinishLaunching(_ notification:Notification){Notifier.requestPermission();LinkReceiver.shared.register()}
     func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {
         guard let tunnel,tunnel.busy else{return .terminateNow}
         tunnel.afterStop={sender.reply(toApplicationShouldTerminate:true)}
@@ -44,8 +56,14 @@ final class AppDelegate:NSObject,NSApplicationDelegate {
 
 @main struct FortiBreakApp:App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @StateObject private var profiles=ProfileStore(preview:CommandLine.arguments.contains("--preview"))
-    @StateObject private var tunnel=TunnelManager()
+    @StateObject private var profiles:ProfileStore
+    @StateObject private var tunnel:TunnelManager
+    @StateObject private var controller:AppController
+    init() {
+        let store=ProfileStore(preview:CommandLine.arguments.contains("--preview")),tunnel=TunnelManager()
+        _profiles=StateObject(wrappedValue:store);_tunnel=StateObject(wrappedValue:tunnel)
+        _controller=StateObject(wrappedValue:AppController(store:store,tunnel:tunnel))
+    }
     var body:some Scene{
         Window("FortiBreak",id:"main"){
             MainView(store:profiles,tunnel:tunnel).frame(minWidth:780,minHeight:600)
@@ -61,19 +79,15 @@ final class AppDelegate:NSObject,NSApplicationDelegate {
                 Button("Show Activity"){NotificationCenter.default.post(name:.init("showActivity"),object:nil)}.keyboardShortcut("l")
             }
         }
-        MenuBarExtra{MenuPanel(store:profiles,tunnel:tunnel)} label:{Image(systemName:MenuPanel.icon(tunnel.state))}
+        MenuBarExtra{MenuPanel(store:profiles,tunnel:tunnel,controller:controller)} label:{Image(systemName:MenuPanel.icon(tunnel.state))}
             .menuBarExtraStyle(.window)
-        Settings{SettingsView(store:profiles,tunnel:tunnel)}
+        Settings{SettingsView(store:profiles,tunnel:tunnel,controller:controller)}
     }
     private func connectOnLaunch() {
         guard !delegate.launchHandled else{return}
         delegate.launchHandled=true
-        if CommandLine.arguments.contains("--preview-connected") || CommandLine.arguments.contains("--preview-connecting"),let p=profiles.current {tunnel.previewConnected(p)}
-        guard !profiles.preview,!tunnel.busy,tunnel.helperReady,let id=UserDefaults.standard.string(forKey:"connectOnLaunch"),
-              let p=profiles.profiles.first(where:{$0.id.uuidString==id}),p.unsupported==nil else{return}
-        profiles.selected=p.id
-        tunnel.log("Connecting to \(p.name) because it is set to connect when FortiBreak opens.")
-        tunnel.connect(p,password:CredentialStore.password(p.id),preview:false)
+        if ["--preview-connected","--preview-connecting","--preview-paused","--preview-expiring"].contains(where:CommandLine.arguments.contains),let p=profiles.current {tunnel.previewConnected(p)}
+        controller.launch()
     }
 }
 
@@ -81,11 +95,13 @@ struct MainView:View {
     @ObservedObject var store:ProfileStore
     @ObservedObject var tunnel:TunnelManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @ViewState<String> private var search=""
     @ViewState private var editor: VPNProfile?
     @ViewState private var imported: ImportResult?
     @ViewState<Bool> private var importOpen=false
-    @ViewState<Int> private var page=CommandLine.arguments.contains("--preview-activity") ? 1 : 0
+    @ViewState<Int> private var page=CommandLine.arguments.contains("--preview-activity") ? 3 : CommandLine.arguments.contains("--preview-history") ? 2 : CommandLine.arguments.contains("--preview-network") ? 1 : 0
+    @ViewState<Bool> private var confirmClearHistory=false
     @ViewState private var deleteTarget: VPNProfile?
     @ViewState<String> private var password=""
     @ViewState<Bool> private var savePassword=false
@@ -108,9 +124,17 @@ struct MainView:View {
             .confirmationDialog("Delete this connection?",isPresented:Binding(get:{deleteTarget != nil},set:{if !$0{deleteTarget=nil}}),titleVisibility:.visible){Button("Delete",role:.destructive){if let p=deleteTarget{store.remove(p)};deleteTarget=nil};Button("Cancel",role:.cancel){deleteTarget=nil}}message:{Text("Its saved password in FortiBreak’s Keychain is also removed. FortiClient is unaffected.")}
             .onReceive(NotificationCenter.default.publisher(for:.init("importProfiles"))){_ in importOpen=true}
             .onReceive(NotificationCenter.default.publisher(for:.init("newProfile"))){_ in editor=VPNProfile()}
-            .onReceive(NotificationCenter.default.publisher(for:.init("showActivity"))){_ in page=1}
+            .onReceive(NotificationCenter.default.publisher(for:.init("showActivity"))){_ in page=3}
+            .confirmationDialog("Clear connection history?",isPresented:$confirmClearHistory){Button("Clear History",role:.destructive){tunnel.clearHistory()}}message:{Text("Removes past sessions for every connection. A learned session limit is forgotten too.")}
             .onChange(of:store.selected){_,_ in password="";savePassword=false;page=0}
-            .onAppear{tunnel.showWindow={openWindow(id:"main")}}
+            .onAppear{
+                tunnel.showWindow={openWindow(id:"main")}
+                // Design preview: open screens that otherwise need clicks.
+                guard store.preview else{return}
+                if CommandLine.arguments.contains(where:{$0.hasPrefix("--preview-settings")}) {openSettings()}
+                if CommandLine.arguments.contains("--preview-editor") {editor=store.current}
+                if CommandLine.arguments.contains("--preview-hud") {DispatchQueue.main.asyncAfter(deadline:.now()+1){HUD.show(symbol:"lock.shield.fill",title:"Connecting",detail:store.current?.name ?? "",tint:.accentColor)}}
+            }
     }
 
     // MARK: Sidebar
@@ -118,7 +142,7 @@ struct MainView:View {
         List(selection:$store.selected){
             Section("Connections"){
                 ForEach(visible){p in
-                    ProfileRow(profile:p,phase:tunnel.activeProfile == p.id && tunnel.busy ? (tunnel.state == .connected ? .connected : .working) : .idle,
+                    ProfileRow(profile:p,phase:tunnel.activeProfile == p.id && tunnel.busy ? (tunnel.state == .connected ? .connected : tunnel.state == .paused ? .paused : .working) : .idle,
                                status:tunnel.activeProfile == p.id && tunnel.busy ? (tunnel.state == .connected ? "Connected · "+tunnel.elapsed : tunnel.state.rawValue+"…") : nil)
                         .tag(p.id)
                         .contextMenu{
@@ -164,7 +188,14 @@ struct MainView:View {
         if store.profiles.isEmpty {
             WelcomeView(onFortiClient:importCurrentFortiProfile,onImport:{importOpen=true},onCreate:{editor=VPNProfile()})
         } else if let p=store.current {
-            Group{if page==1{activity}else{overview(p)}}
+            Group{
+                switch page {
+                case 1:NetworkPage(tunnel:tunnel,profile:p,connected:connected)
+                case 2:HistoryPage(tunnel:tunnel,profile:p)
+                case 3:activity
+                default:overview(p)
+                }
+            }
                 .navigationTitle(p.name)
                 .navigationSubtitle(connected ? "Connected · "+tunnel.elapsed : active ? tunnel.state.rawValue : p.host)
                 .toolbar{detailToolbar(p)}
@@ -174,9 +205,13 @@ struct MainView:View {
     }
     @ToolbarContentBuilder private func detailToolbar(_ p:VPNProfile)->some ToolbarContent{
         ToolbarItem(placement:.principal){
-            Picker("View",selection:$page){Text("Overview").tag(0);Text("Activity").tag(1)}.pickerStyle(.segmented).fixedSize().help("Show the connection or its activity log (⌘L)")
+            Picker("View",selection:$page){Text("Overview").tag(0);Text("Network").tag(1);Text("History").tag(2);Text("Activity").tag(3)}.pickerStyle(.segmented).fixedSize().help("Overview, routes and DNS, past sessions, or the activity log (⌘L)")
         }
         if page==1 {
+            ToolbarItem{Button("Refresh",systemImage:"arrow.clockwise"){tunnel.refreshRoutes()}.disabled(!connected).help("Read the routing table again")}
+        } else if page==2 {
+            ToolbarItem{Button("Clear History",systemImage:"trash"){confirmClearHistory=true}.disabled(tunnel.sessions.isEmpty).help("Clear past sessions")}
+        } else if page==3 {
             ToolbarItemGroup{
                 Button("Check Network",systemImage:"stethoscope"){tunnel.captureNetwork()}.help("Record local routes and DNS servers. No external probe is made.")
                 Button("Copy",systemImage:"doc.on.doc"){copyLogs()}.disabled(tunnel.logs.isEmpty).help("Copy the shown events. Review addresses before sharing.")
@@ -191,6 +226,7 @@ struct MainView:View {
     // MARK: Overview
     private func phase(_ p:VPNProfile)->Phase{
         if connected {return .connected}
+        if active && tunnel.state == .paused {return .paused}
         if active {return .working}
         if !primaryEnabled(p) {return .unavailable}
         return tunnel.state == .failed ? .failed : .idle
@@ -201,6 +237,11 @@ struct MainView:View {
             VStack(spacing:22){
                 hero(p,phase:phase)
                 if let reason=p.unsupported {Banner(symbol:"exclamationmark.triangle.fill",tint:.orange,title:"Import only",message:reason){EmptyView()}}
+                if connected && tunnel.expiryWarning,let ends=tunnel.sessionEndsAt {
+                    Banner(symbol:"hourglass",tint:.orange,title:"Gateway session ends around "+ends.formatted(date:.omitted,time:.shortened),message:"Sign in again now so the VPN does not drop in the middle of something."){
+                        Button("Sign In Again"){tunnel.renewSession()}.buttonStyle(.borderedProminent).controlSize(.large)
+                    }
+                }
                 if !tunnel.helperReady || tunnel.helperSetupBusy {
                     Banner(symbol:"lock.shield.fill",tint:.accentColor,title:tunnel.helperInstalled ? "Approve the VPN helper for this version" : "Enable the VPN helper",message:"A one-time macOS administrator prompt. FortiBreak never sees your password."){
                         if tunnel.helperSetupBusy {ProgressView().controlSize(.small)}
@@ -222,12 +263,14 @@ struct MainView:View {
                         Toggle("Save password in Keychain",isOn:$savePassword).toggleStyle(.checkbox)
                     }
                 }
-                if connected {ThroughputCard(tunnel:tunnel)}
+                if connected {
+                    LazyVGrid(columns:[GridItem(.adaptive(minimum:330),spacing:14,alignment:.top)],spacing:14){ThroughputCard(tunnel:tunnel);HealthCard(tunnel:tunnel)}
+                }
                 LazyVGrid(columns:[GridItem(.adaptive(minimum:200),spacing:14)],spacing:14){
                     if connected {
                         Card(title:"Session",symbol:"clock.fill",tint:.green){
                             CardValue(tunnel.elapsed)
-                            CardNote(tunnel.connectedAt.map{"Since "+$0.formatted(date:.omitted,time:.shortened)} ?? "")
+                            CardNote((tunnel.connectedAt.map{"Since "+$0.formatted(date:.omitted,time:.shortened)} ?? "")+(tunnel.sessionEndsAt.map{" · ends ~"+$0.formatted(date:.omitted,time:.shortened)} ?? ""))
                         }
                         Card(title:"VPN Address",symbol:"number",tint:.purple){
                             CardValue(tunnel.vpnAddress)
@@ -244,7 +287,7 @@ struct MainView:View {
                     }
                     if !connected {
                         Card(title:"Last Session",symbol:"calendar",tint:.teal){
-                            let last=Design.lastSession(p.id)
+                            let last=Design.lastSession(tunnel.lastSession(p.id))
                             CardValue(last?.when ?? "Never")
                             CardNote(last?.detail ?? "Tracked after your first connection")
                         }
@@ -273,12 +316,24 @@ struct MainView:View {
                 .help(active ? primaryTitle : phase == .unavailable ? "Not available yet" : "Connect (⌘K)")
             Text(heroTitle(phase)).font(.system(size:32,weight:.bold,design:.rounded)).contentTransition(.opacity)
             Text(heroSubtitle(p,phase:phase)).font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth:460)
-            if active && !connected && tunnel.state != .stopping {
+            if phase == .paused {
+                HStack(spacing:10){
+                    Button("Resume Now"){tunnel.resumeNow()}.buttonStyle(.borderedProminent).tint(.purple)
+                    Button("Stay Off"){tunnel.disconnect()}.buttonStyle(.bordered)
+                }.controlSize(.large).padding(.top,2)
+            } else if active && !connected && tunnel.state != .stopping {
                 Button(primaryTitle,role:.cancel){primaryAction(p)}.buttonStyle(.bordered).controlSize(.regular).padding(.top,2)
             }
             if connected {
-                Button("Disconnect",role:.destructive){primaryAction(p)}.buttonStyle(.bordered).tint(.red).controlSize(.regular).padding(.top,2)
+                HStack(spacing:10){
+                    Button("Disconnect",role:.destructive){primaryAction(p)}.buttonStyle(.bordered).tint(.red)
+                    Menu{
+                        ForEach([15,30,60,120],id:\.self){minutes in Button(minutes<60 ? "\(minutes) minutes" : minutes==60 ? "1 hour" : "\(minutes/60) hours"){tunnel.pause(minutes:minutes)}}
+                    } label:{Label("Pause",systemImage:"pause.fill")}.menuStyle(.button).buttonStyle(.bordered).fixedSize().help("Disconnect now and reconnect automatically later")
+                    if tunnel.sessionEndsAt != nil {Button("Sign In Again"){tunnel.renewSession()}.buttonStyle(.bordered).help("Start a fresh gateway session now")}
+                }.controlSize(.regular).padding(.top,2)
                 HStack(spacing:8){
+                    Chip(symbol:Design.quality(tunnel.quality).symbol,text:tunnel.quality.rawValue+(HealthPolicy.median(tunnel.health).map{" · \(Int($0.rounded())) ms"} ?? ""))
                     Chip(symbol:"clock",text:tunnel.elapsed)
                     Chip(symbol:"number",text:tunnel.vpnAddress)
                     Chip(symbol:"arrow.down",text:Design.bytes(tunnel.receiveRate)+"/s")
@@ -293,6 +348,7 @@ struct MainView:View {
         switch phase {
         case .connected:"Connected"
         case .working:tunnel.state.rawValue
+        case .paused:"Paused"
         case .failed:"Couldn’t Connect"
         default:"Not Connected"
         }
@@ -304,12 +360,13 @@ struct MainView:View {
         if !tunnel.helperReady {return "Approve the VPN helper below to start connecting."}
         return "Click to connect to "+p.host+"."
     }
-    private var primaryTitle:String{active ? (tunnel.state == .reconnecting ? "Cancel Reconnect" : tunnel.state == .connected ? "Disconnect" : "Cancel") : "Connect"}
+    private var primaryTitle:String{active ? (tunnel.state == .reconnecting ? "Cancel Reconnect" : tunnel.state == .paused ? "Resume Now" : tunnel.state == .connected ? "Disconnect" : "Cancel") : "Connect"}
     private func primaryEnabled(_ p:VPNProfile)->Bool {
         if tunnel.activeProfile == p.id && tunnel.busy {return tunnel.state != .stopping}
         return p.unsupported == nil && !tunnel.busy && tunnel.backendReady && !tunnel.helperSetupBusy && tunnel.helperReady
     }
     private func primaryAction(_ p:VPNProfile) {
+        if tunnel.activeProfile == p.id && tunnel.state == .paused {tunnel.resumeNow();return}
         if tunnel.activeProfile == p.id && tunnel.busy {tunnel.disconnect();return}
         guard primaryEnabled(p) else{return}
         do{if savePassword && !password.isEmpty{try CredentialStore.save(password,id:p.id)};let secret=password.isEmpty ? CredentialStore.password(p.id):password;tunnel.connect(p,password:secret,preview:store.preview);password=""}catch{self.error=error.localizedDescription}
@@ -380,7 +437,7 @@ struct PowerButton:View {
                     .overlay(Circle().fill(LinearGradient(colors:[.white.opacity(0.28),.clear],startPoint:.top,endPoint:.center)))
                     .overlay(Circle().strokeBorder(.white.opacity(0.25),lineWidth:1))
                     .shadow(color:phase == .unavailable ? .clear : phase.tint.opacity(hovering ? 0.6 : 0.42),radius:hovering ? 28 : 20,y:10)
-                Image(systemName:phase == .connected ? "lock.shield.fill" : "power")
+                Image(systemName:phase == .connected ? "lock.shield.fill" : phase == .paused ? "play.fill" : "power")
                     .font(.system(size:46,weight:.semibold)).foregroundStyle(.white.opacity(phase == .unavailable ? 0.85 : 1))
                     .contentTransition(.symbolEffect(.replace))
             }
@@ -393,10 +450,10 @@ struct PowerButton:View {
         .onHover{h in withAnimation(.easeOut(duration:0.18)){hovering=h}}
         .onChange(of:phase,initial:true){_,p in
             if p == .working {spin=false;withAnimation(.linear(duration:1.1).repeatForever(autoreverses:false)){spin=true}} else {spin=false}
-            if p == .working || p == .connected {withAnimation(.easeInOut(duration:2.4).repeatForever(autoreverses:true)){breathe=true}}
+            if p == .working || p == .connected || p == .paused {withAnimation(.easeInOut(duration:2.4).repeatForever(autoreverses:true)){breathe=true}}
             else {withAnimation(.easeOut(duration:0.3)){breathe=false}}
         }
-        .accessibilityLabel(phase == .connected ? "Disconnect" : "Connect")
+        .accessibilityLabel(phase == .connected ? "Disconnect" : phase == .paused ? "Resume" : "Connect")
     }
 }
 
@@ -620,6 +677,10 @@ struct ProfileEditor:View {
     var isNew=false
     var onSave:(VPNProfile)->Void
     @ViewState private var validation: String?
+    @ViewState private var actions=AfterConnectActions()
+    @ViewState private var healthHost=""
+    @ViewState private var limitMinutes=0
+    @ViewState private var newLink=""
     var body:some View{
         VStack(spacing:0){
             Text(isNew ? "New Connection" : "Connection Settings").font(.headline).padding(.top,18)
@@ -633,6 +694,24 @@ struct ProfileEditor:View {
                     fileRow("Private key",path:$profile.keyFile)
                     TextField("Pinned SHA-256",text:$profile.trustedCertificate,prompt:Text("Optional"))
                 } header:{Text("Certificates")} footer:{Text("PEM files. Normal certificate validation stays enabled. Pin a fingerprint only if you received it through a trusted channel.").foregroundStyle(.secondary)}
+                Section{
+                    TextField("Health check host",text:$healthHost,prompt:Text("Gateway DNS server"))
+                    Picker("Session limit warning",selection:$limitMinutes){
+                        Text("Learn from drops").tag(0);Text("Off").tag(-1)
+                        ForEach([240,480,600,720,1440],id:\.self){Text("After \($0/60) hours").tag($0)}
+                    }
+                } header:{Text("Monitoring")} footer:{Text("While connected, FortiBreak checks this host every 5 seconds and restarts a stalled tunnel. Use host or host:port. The warning comes 10 minutes before the gateway ends a session.").foregroundStyle(.secondary)}
+                Section{
+                    ForEach(actions.urls.indices,id:\.self){i in
+                        HStack{Label(actions.urls[i],systemImage:"link").lineLimit(1).truncationMode(.middle);Spacer();Button("Remove",systemImage:"minus.circle.fill"){actions.urls.remove(at:i)}.labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(.red)}
+                    }
+                    HStack{
+                        TextField("Open link",text:$newLink,prompt:Text("https://intranet… or smb://server/share")).onSubmit{addLink()}
+                        Button("Add"){addLink()}.disabled(!AfterConnectActions.valid(newLink))
+                    }
+                    fileRow("Run script",path:$actions.script)
+                    Toggle("Also after automatic reconnects",isOn:$actions.afterReconnects)
+                } header:{Text("After Connecting")} footer:{Text("Links can be web pages, file shares (smb://, afp://) or remote sessions. The script runs as you with FORTIBREAK_CONNECTION, FORTIBREAK_GATEWAY, FORTIBREAK_VPN_ADDRESS and FORTIBREAK_INTERFACE set.").foregroundStyle(.secondary)}
             }.formStyle(.grouped)
             if let validation{Label(validation,systemImage:"exclamationmark.triangle.fill").foregroundStyle(.red).font(.callout).padding(.horizontal,20).padding(.bottom,8)}
             Divider()
@@ -640,9 +719,20 @@ struct ProfileEditor:View {
                 if profile.vpnProtocol != "ssl"{Text("IPsec · import only").font(.caption).foregroundStyle(.orange)}
                 Spacer()
                 Button("Cancel"){dismiss()}.keyboardShortcut(.cancelAction)
-                Button(isNew ? "Add" : "Save"){do{try profile.validate();onSave(profile)}catch{validation=error.localizedDescription}}.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                Button(isNew ? "Add" : "Save"){save()}.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }.padding(16)
-        }.frame(width:520,height:640)
+        }.frame(width:560,height:720)
+        .onAppear{actions=AfterConnectActions.load(profile.id);healthHost=ProfileSettings.healthHost(profile.id);limitMinutes=ProfileSettings.sessionLimitMinutes(profile.id)}
+    }
+    private func addLink(){let link=newLink.trimmingCharacters(in:.whitespaces);guard AfterConnectActions.valid(link) else{return};actions.urls.append(link);newLink=""}
+    private func save() {
+        do {
+            try profile.validate()
+            let host=healthHost.trimmingCharacters(in:.whitespaces)
+            guard host.isEmpty || ReachTarget.parse(host) != nil else{throw AppError("Health check host must be a hostname or IP address, optionally with :port.")}
+            ProfileSettings.setHealthHost(host,profile.id);ProfileSettings.setSessionLimitMinutes(limitMinutes,profile.id);actions.save(profile.id)
+            onSave(profile)
+        } catch {validation=error.localizedDescription}
     }
     private func fileRow(_ title:String,path:Binding<String>)->some View{
         LabeledContent(title){
@@ -690,6 +780,7 @@ struct ImportPreview:View {
 struct MenuPanel:View {
     @ObservedObject var store:ProfileStore
     @ObservedObject var tunnel:TunnelManager
+    let controller:AppController
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
     @AppStorage("autoReconnect") private var autoReconnect=true
@@ -698,10 +789,11 @@ struct MenuPanel:View {
         case .connected:"network.badge.shield.half.filled"
         case .failed:"exclamationmark.triangle"
         case .idle:"network"
+        case .paused:"pause.circle"
         default:"arrow.triangle.2.circlepath"
         }
     }
-    private var phase:Phase{tunnel.state == .connected ? .connected : tunnel.busy ? .working : tunnel.state == .failed ? .failed : .idle}
+    private var phase:Phase{tunnel.state == .connected ? .connected : tunnel.state == .paused ? .paused : tunnel.busy ? .working : tunnel.state == .failed ? .failed : .idle}
     private var ready:[VPNProfile]{store.profiles.filter{$0.unsupported == nil}.sorted{a,b in a.favorite != b.favorite ? a.favorite : a.name.localizedStandardCompare(b.name) == .orderedAscending}}
     private var target:VPNProfile?{ready.first{$0.id == tunnel.activeProfile} ?? ready.first{$0.id == store.selected} ?? ready.first}
     var body:some View {
@@ -712,7 +804,24 @@ struct MenuPanel:View {
                     stat("clock","Session",tunnel.elapsed)
                     stat("arrow.down","Down",Design.bytes(tunnel.receiveRate)+"/s")
                     stat("arrow.up","Up",Design.bytes(tunnel.sendRate)+"/s")
-                }.padding(.horizontal,16).padding(.bottom,14)
+                    stat(Design.quality(tunnel.quality).symbol,"Health",tunnel.quality.rawValue)
+                }.padding(.horizontal,16).padding(.bottom,10)
+                HStack(spacing:8){
+                    Menu{
+                        ForEach([15,30,60,120],id:\.self){minutes in Button(minutes<60 ? "\(minutes) minutes" : minutes==60 ? "1 hour" : "\(minutes/60) hours"){tunnel.pause(minutes:minutes)}}
+                    } label:{Label("Pause",systemImage:"pause.fill")}.menuStyle(.button).fixedSize()
+                    if tunnel.sessionEndsAt != nil {Button("Sign In Again"){tunnel.renewSession()}}
+                    Spacer()
+                    if let ends=tunnel.sessionEndsAt {Text("Ends ~"+ends.formatted(date:.omitted,time:.shortened)).font(.caption).foregroundStyle(tunnel.expiryWarning ? Color.orange : Color.secondary)}
+                }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal,16).padding(.bottom,14)
+            }
+            if tunnel.state == .paused {
+                HStack(spacing:8){
+                    Button("Resume Now"){tunnel.resumeNow()}.buttonStyle(.borderedProminent).tint(.purple)
+                    Button("Stay Off"){tunnel.disconnect()}.buttonStyle(.bordered)
+                    Spacer()
+                    if let until=tunnel.pausedUntil {Text("Resumes "+until.formatted(date:.omitted,time:.shortened)).font(.caption).foregroundStyle(.secondary)}
+                }.controlSize(.small).padding(.horizontal,16).padding(.bottom,14)
             }
             Divider()
             VStack(alignment:.leading,spacing:2) {
@@ -739,7 +848,7 @@ struct MenuPanel:View {
     }
     private var header:some View {
         HStack(spacing:12) {
-            IconBadge(symbol:phase == .connected ? "lock.shield.fill" : phase == .working ? "arrow.triangle.2.circlepath" : "network",color:phase == .idle ? .gray : phase.tint,size:40)
+            IconBadge(symbol:phase == .connected ? "lock.shield.fill" : phase == .paused ? "pause.fill" : phase == .working ? "arrow.triangle.2.circlepath" : "network",color:phase == .idle ? .gray : phase.tint,size:40)
                 .symbolEffect(.pulse,isActive:phase == .working)
             VStack(alignment:.leading,spacing:2) {
                 Text(phase == .connected ? "Connected" : tunnel.busy ? tunnel.state.rawValue : phase == .failed ? "Connection failed" : "Not connected").font(.headline)
@@ -771,13 +880,7 @@ struct MenuPanel:View {
     private func toggle(_ p:VPNProfile) {
         if tunnel.activeProfile == p.id && tunnel.busy {tunnel.disconnect()} else {connect(p)}
     }
-    private func connect(_ p:VPNProfile) {
-        store.selected=p.id
-        let secret=CredentialStore.password(p.id)
-        // Without a saved password the engine prompts; show the window for it.
-        if p.login == .password && secret.isEmpty {show()}
-        tunnel.connect(p,password:secret,preview:store.preview)
-    }
+    private func connect(_ p:VPNProfile) {controller.connect(p,origin:"Menu bar")}
     private func show(){dismiss();NSApplication.shared.activate(ignoringOtherApps:true);openWindow(id:"main")}
 }
 
@@ -812,12 +915,16 @@ struct PanelRow:View {
 struct SettingsView:View {
     @ObservedObject var store:ProfileStore
     @ObservedObject var tunnel:TunnelManager
+    let controller:AppController
+    @ViewState<String> private var tab=CommandLine.arguments.first{$0.hasPrefix("--preview-settings=")}.map{String($0.dropFirst("--preview-settings=".count))} ?? "general"
     var body:some View {
-        TabView {
-            GeneralSettings(store:store,tunnel:tunnel).tabItem{Label("General",systemImage:"gearshape")}
-            HelperSettings(store:store,tunnel:tunnel).tabItem{Label("VPN Helper",systemImage:"lock.shield")}
+        TabView(selection:$tab) {
+            GeneralSettings(store:store,tunnel:tunnel).tabItem{Label("General",systemImage:"gearshape")}.tag("general")
+            WiFiSettings(store:store,controller:controller,wifi:controller.wifi).tabItem{Label("Wi-Fi",systemImage:"wifi")}.tag("wifi")
+            ShortcutSettings(store:store,controller:controller).tabItem{Label("Shortcuts",systemImage:"command")}.tag("shortcuts")
+            HelperSettings(store:store,tunnel:tunnel).tabItem{Label("VPN Helper",systemImage:"lock.shield")}.tag("helper")
         }
-        .frame(width:500)
+        .frame(width:520)
     }
 }
 
@@ -826,7 +933,7 @@ struct GeneralSettings:View {
     @ObservedObject var tunnel:TunnelManager
     @AppStorage("autoReconnect") private var autoReconnect=true
     @AppStorage("notifications") private var notifications=true
-    @AppStorage("connectOnLaunch") private var connectOnLaunch=""
+    @AppStorage("connectOnLaunch") private var connectOnLaunch="favorite"
     @ViewState<Bool> private var openAtLogin=false
     @ViewState private var loginNote: String?
     var body:some View {
@@ -835,10 +942,11 @@ struct GeneralSettings:View {
                 Toggle("Reconnect automatically if the tunnel drops",isOn:$autoReconnect)
                 Picker("When FortiBreak opens",selection:$connectOnLaunch){
                     Text("Don’t connect").tag("")
+                    Text("Connect the favorite").tag("favorite")
                     ForEach(store.profiles.filter{$0.unsupported == nil}){Text("Connect to "+$0.name).tag($0.id.uuidString)}
                 }
             } header:{Text("Connection")} footer:{
-                Text("Up to \(ReconnectPolicy.delays.count) attempts after \(ReconnectPolicy.delays.map{"\(Int($0))"}.joined(separator:", ")) seconds, once a network is available. Browser SSO may open a sign-in tab. Disconnect cancels.").foregroundStyle(.secondary)
+                Text("The favorite is your starred connection, or your only one. Reconnecting makes up to \(ReconnectPolicy.delays.count) attempts after \(ReconnectPolicy.delays.map{"\(Int($0))"}.joined(separator:", ")) seconds, once a network is available, and also restarts a stalled tunnel. Browser SSO may open a sign-in tab.").foregroundStyle(.secondary)
             }
             Section("App") {
                 Toggle("Open FortiBreak at login",isOn:Binding(get:{openAtLogin},set:{setOpenAtLogin($0)}))
@@ -851,7 +959,7 @@ struct GeneralSettings:View {
                 LabeledContent("VPN engine",value:tunnel.backendReady ? "openfortivpn" : "Missing from this build. Reinstall FortiBreak.")
             }
         }
-        .formStyle(.grouped).frame(height:400)
+        .formStyle(.grouped).frame(height:440)
         .onAppear{refreshLoginState()}
     }
     private func refreshLoginState() {

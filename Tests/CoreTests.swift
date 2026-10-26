@@ -82,6 +82,54 @@ import Darwin
         check(ReconnectPolicy.delay(enabled:true,wasConnected:true,userStopped:true,attempt:0)==nil,"User disconnect never reconnects")
         check(ReconnectPolicy.delay(enabled:false,wasConnected:true,userStopped:false,attempt:0)==nil,"Reconnect respects the setting")
         check(ReconnectPolicy.delay(enabled:true,wasConnected:true,userStopped:false,attempt:ReconnectPolicy.delays.count)==nil && ReconnectPolicy.delays==ReconnectPolicy.delays.sorted(),"Reconnect attempts are bounded with growing delays")
+        // Session limits
+        check(SessionLimit.learn(from:[28_790,600,28_850])==28_800,"Two similar long drops reveal the gateway session limit")
+        check(SessionLimit.learn(from:[36_060])==36_000,"One drop at a whole hour reveals the limit")
+        check(SessionLimit.learn(from:[600,1_200,5_000])==nil,"Short or irregular drops teach nothing")
+        check(SessionLimit.learn(from:[3_600])==nil,"A single one-hour drop is not enough evidence")
+        // Tunnel health
+        let now=Date()
+        func samples(_ values:[Double?])->[HealthSample]{values.enumerated().map{HealthSample(time:now.addingTimeInterval(Double($0.offset)*5),latency:$0.element)}}
+        check(HealthPolicy.quality(samples([20,22,19,25]))==TunnelQuality.good,"Fast answers are good")
+        check(HealthPolicy.quality(samples([400,380,420]))==TunnelQuality.slow,"Slow answers are slow")
+        check(HealthPolicy.quality(samples([20,nil,nil]))==TunnelQuality.stalled,"Two misses in a row are stalled")
+        check(HealthPolicy.quality(samples([nil,nil,nil]))==TunnelQuality.unavailable,"A host that never answers is no health check")
+        check(HealthPolicy.shouldRestart(samples([20,nil,nil,nil,nil])),"Four misses after an answer restart the tunnel")
+        check(!HealthPolicy.shouldRestart(samples([nil,nil,nil,nil,nil,nil])),"A host that never answered never restarts the tunnel")
+        check(!HealthPolicy.shouldRestart(samples([20,nil,nil,nil,30])),"An answer resets the miss count")
+        // Engine output and routes
+        let got="INFO:   Got addresses: [10.241.3.15], ns [10.0.0.50, 10.0.0.40], ns_suffix [corp.local]"
+        check(TunnelLog.dnsServers(got)==["10.0.0.50","10.0.0.40"],"DNS servers parsed from engine output")
+        check(TunnelLog.searchDomains(got)==["corp.local"],"Search domain parsed separately from DNS servers")
+        check(TunnelLog.dnsServers("INFO:   Tunnel is up and running.").isEmpty,"Unrelated lines have no DNS servers")
+        let netstat="Destination        Gateway            Flags               Netif Expire\ndefault            192.168.0.1        UGScg                 en0\n10.1/16            ppp0               USc                  ppp0\n192.168.50         ppp0               USc                  ppp0\n10.0.0.50          10.241.3.15        UH                   ppp0\n0/1                ppp0               USc                  ppp0\n128.0/1            ppp0               USc                  ppp0\n10.1/16            ppp0               USc                  ppp0"
+        let routes=TunnelLog.routes(netstat:netstat,interface:"ppp0")
+        check(routes==["10.1.0.0/16","192.168.50.0/24","10.0.0.50","0.0.0.0/1","128.0.0.0/1"],"VPN routes expanded, deduplicated and limited to the tunnel")
+        check(TunnelLog.isFullTunnel(routes) && !TunnelLog.isFullTunnel(["10.1.0.0/16"]),"Full tunnel recognized from /1 routes")
+        // Links
+        check(LinkParser.parse(URL(string:"fortibreak://connect?profile=Office")!)==LinkCommand(action:.connect,profile:"Office"),"Connect link with a profile")
+        check(LinkParser.parse(URL(string:"fortibreak://pause")!)?.minutes==30,"Pause link defaults to 30 minutes")
+        check(LinkParser.parse(URL(string:"fortibreak://pause?minutes=9999")!)==nil,"Pause link rejects absurd durations")
+        check(LinkParser.parse(URL(string:"fortibreak://format-disk")!)==nil && LinkParser.parse(URL(string:"https://connect")!)==nil,"Unknown actions and schemes are ignored")
+        // Reachability targets
+        check(ReachTarget.parse("intranet.corp.local")! == ("intranet.corp.local",443),"Host alone defaults to port 443")
+        check(ReachTarget.parse("10.0.0.50:53")! == ("10.0.0.50",53),"Host and port parsed")
+        check(ReachTarget.parse("[fd00::1]:22")! == ("fd00::1",22),"Bracketed IPv6 parsed")
+        check(ReachTarget.parse("host; rm -rf /")==nil && ReachTarget.parse("host:0")==nil && ReachTarget.parse("-x")==nil,"Unsafe or invalid targets rejected")
+        // Wi-Fi rules
+        check(WiFiPolicy.decide(enabled:true,ssid:"Cafe",trusted:["Office"],disconnectOnTrusted:false,vpnActive:false,suppressed:false) == .connect,"Untrusted Wi-Fi connects")
+        check(WiFiPolicy.decide(enabled:true,ssid:"Office",trusted:["Office"],disconnectOnTrusted:false,vpnActive:false,suppressed:false) == .none,"Trusted Wi-Fi never connects")
+        check(WiFiPolicy.decide(enabled:true,ssid:"Office",trusted:["Office"],disconnectOnTrusted:true,vpnActive:true,suppressed:false) == .disconnect,"Trusted Wi-Fi can disconnect")
+        check(WiFiPolicy.decide(enabled:true,ssid:"Cafe",trusted:[],disconnectOnTrusted:false,vpnActive:false,suppressed:true) == .none,"A manual disconnect is respected on that network")
+        check(WiFiPolicy.decide(enabled:false,ssid:"Cafe",trusted:[],disconnectOnTrusted:false,vpnActive:false,suppressed:false) == .none && WiFiPolicy.decide(enabled:true,ssid:nil,trusted:[],disconnectOnTrusted:false,vpnActive:false,suppressed:false) == .none,"Rules off or unknown network do nothing")
+        // Launch target
+        var a=VPNProfile();a.name="Alpha";a.host="a.example.com"
+        var b=VPNProfile();b.name="Beta";b.host="b.example.com";b.favorite=true
+        var c=VPNProfile();c.name="IPsec";c.host="c.example.com";c.vpnProtocol="ipsec";c.favorite=true
+        check(LaunchTarget.pick("favorite",profiles:[a,b,c])?.name=="Beta","Launch picks the starred SSL connection")
+        check(LaunchTarget.pick("favorite",profiles:[a])?.name=="Alpha","Launch uses the only connection when none is starred")
+        check(LaunchTarget.pick("favorite",profiles:[a,{var x=a;x.id=UUID();x.name="Gamma";return x}()])==nil,"Several unstarred connections pick none")
+        check(LaunchTarget.pick("",profiles:[a,b])==nil && LaunchTarget.pick(a.id.uuidString,profiles:[a,b])?.name=="Alpha","Launch respects off and a specific connection")
         print("Passed \(count) core checks. No network connections made.")
     }
 }

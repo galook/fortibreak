@@ -21,6 +21,13 @@ import Darwin
         precondition(SessionDiagnostics.load(from:file).isEmpty)
         let snapshot=SessionDiagnostics.snapshot()
         precondition(snapshot.contains("scutil --dns") && snapshot.contains("netstat -rn -f inet"))
-        print("Passed private diagnostics persistence, timestamp, bounded history, clear/corrupt-file and local network snapshot checks. No VPN or external probes.")
+        let historyFile=directory.appendingPathComponent("history.json")
+        let entry=SessionEntry(profileID:UUID(),profileName:"Office",start:date,end:date.addingTimeInterval(3_600),received:42,sent:7,reason:.dropped)
+        HistoryStore.save([entry],to:historyFile)
+        precondition(HistoryStore.load(from:historyFile)==[entry],"Session history round-trips")
+        precondition(lstat(historyFile.path,&info)==0 && info.st_mode & 0o777==0o600,"Session history is private")
+        HistoryStore.save((0..<1_200).map{_ in entry},to:historyFile)
+        precondition(HistoryStore.load(from:historyFile).count==HistoryStore.limit,"Session history is bounded")
+        print("Passed private diagnostics persistence, timestamp, bounded history, clear/corrupt-file, session history and local network snapshot checks. No VPN or external probes.")
     }
 }

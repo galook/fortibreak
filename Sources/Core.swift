@@ -320,3 +320,166 @@ enum FortiSystemParser {
         return item
     }
 }
+
+// MARK: - Session history and gateway session limits
+
+enum SessionEnd: String, Codable { case disconnected, dropped, stalled, paused, renewed }
+struct SessionEntry: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var profileID: UUID
+    var profileName: String
+    var start: Date
+    var end: Date?
+    var received: UInt64 = 0
+    var sent: UInt64 = 0
+    var reason: SessionEnd?
+    func duration(now: Date = Date()) -> TimeInterval { max(0, (end ?? now).timeIntervalSince(start)) }
+}
+
+enum SessionLimit {
+    static let warningLead: TimeInterval = 600
+    // A gateway auth timeout ends sessions at the same length. Two drops within
+    // three minutes of each other, or one drop within three minutes of a whole
+    // hour (two hours or more), is enough evidence. Shorter drops are network noise.
+    static func learn(from drops: [TimeInterval]) -> TimeInterval? {
+        let long = drops.filter { $0 >= 1800 }
+        let recent = Array(long.suffix(6)).sorted()
+        for i in recent.indices.dropFirst() where recent[i] - recent[i-1] <= 180 {
+            return (((recent[i] + recent[i-1]) / 2) / 60).rounded() * 60
+        }
+        for drop in long.reversed() {
+            let hours = (drop / 3600).rounded()
+            if hours >= 2 && abs(drop - hours * 3600) <= 180 { return hours * 3600 }
+        }
+        return nil
+    }
+}
+
+// MARK: - Tunnel health
+
+enum TunnelQuality: String { case measuring = "Measuring", good = "Good", slow = "Slow", stalled = "Stalled", unavailable = "No check" }
+struct HealthSample: Identifiable { let id = UUID(); let time: Date; let latency: Double? }
+enum HealthPolicy {
+    static let interval: TimeInterval = 5
+    static let restartAfter = 4 // consecutive misses, about 20 seconds
+    static func trailingMisses(_ samples: [HealthSample]) -> Int { samples.reversed().prefix { $0.latency == nil }.count }
+    static func quality(_ samples: [HealthSample]) -> TunnelQuality {
+        guard !samples.isEmpty else { return .measuring }
+        guard samples.contains(where: { $0.latency != nil }) else { return samples.count >= 3 ? .unavailable : .measuring }
+        if trailingMisses(samples) >= 2 { return .stalled }
+        let recent = samples.suffix(12), answered = recent.compactMap { $0.latency }.sorted()
+        guard !answered.isEmpty else { return .stalled }
+        let loss = Double(recent.count - answered.count) / Double(recent.count), median = answered[answered.count / 2]
+        return median > 250 || loss > 0.15 ? .slow : .good
+    }
+    // Only a host that answered during this session can prove the tunnel died.
+    static func shouldRestart(_ samples: [HealthSample]) -> Bool {
+        samples.contains { $0.latency != nil } && trailingMisses(samples) >= restartAfter
+    }
+    static func median(_ samples: [HealthSample]) -> Double? {
+        let answered = samples.suffix(12).compactMap { $0.latency }.sorted()
+        return answered.isEmpty ? nil : answered[answered.count / 2]
+    }
+}
+
+// MARK: - Engine output and routing table parsing
+
+enum TunnelLog {
+    // openfortivpn: "Got addresses: [10.241.3.15], ns [10.0.0.50, 10.0.0.40], ns_suffix [corp.local]"
+    private static func bracket(_ name: String, in line: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: "(?:^|[\\s,])" + name + " \\[([^\\]]*)\\]"),
+              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+              let range = Range(match.range(at: 1), in: line) else { return [] }
+        return line[range].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && $0 != "0.0.0.0" && $0 != "(null)" }
+    }
+    static func dnsServers(_ line: String) -> [String] { line.contains("Got addresses") ? bracket("ns", in: line) : [] }
+    static func searchDomains(_ line: String) -> [String] { line.contains("Got addresses") ? bracket("ns_suffix", in: line).flatMap { $0.split(separator: ";").map(String.init) } : [] }
+    // netstat -rn -f inet columns: Destination Gateway Flags Netif Expire
+    static func routes(netstat: String, interface: String) -> [String] {
+        var seen = Set<String>(), result: [String] = []
+        for line in netstat.components(separatedBy: .newlines) {
+            let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+            guard fields.count >= 4, fields[3] == interface, fields[0] != "Destination" else { continue }
+            let destination = expand(fields[0])
+            if seen.insert(destination).inserted { result.append(destination) }
+        }
+        return result
+    }
+    // "10.1/16" -> "10.1.0.0/16"; "10.0.0.50" stays a host; "default" stays.
+    static func expand(_ destination: String) -> String {
+        let parts = destination.split(separator: "/", maxSplits: 1).map(String.init)
+        var octets = parts[0].split(separator: ".").map(String.init)
+        guard !octets.isEmpty, octets.allSatisfy({ Int($0) != nil }) else { return destination }
+        while octets.count < 4 { octets.append("0") }
+        let address = octets.joined(separator: ".")
+        if parts.count == 2 { return address + "/" + parts[1] }
+        return parts[0].split(separator: ".").count == 4 ? address : address + "/" + String(parts[0].split(separator: ".").count * 8)
+    }
+    static func isFullTunnel(_ routes: [String]) -> Bool { routes.contains("0.0.0.0/1") && routes.contains("128.0.0.0/1") || routes.contains("default") }
+}
+
+// MARK: - fortibreak:// links
+
+struct LinkCommand: Equatable {
+    enum Action: String { case connect, disconnect, toggle, pause, resume, open }
+    var action: Action
+    var profile: String? = nil
+    var minutes: Int? = nil
+}
+enum LinkParser {
+    static func parse(_ url: URL) -> LinkCommand? {
+        guard url.scheme?.lowercased() == "fortibreak", let host = url.host?.lowercased(), let action = LinkCommand.Action(rawValue: host) else { return nil }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        var command = LinkCommand(action: action)
+        if let profile = items.first(where: { $0.name == "profile" })?.value, !profile.isEmpty, profile.count <= 200 { command.profile = profile }
+        if action == .pause {
+            let raw = items.first(where: { $0.name == "minutes" })?.value
+            guard let minutes = raw.map({ Int($0) }) ?? 30, (1...480).contains(minutes) else { return nil }
+            command.minutes = minutes
+        }
+        return command
+    }
+}
+
+// MARK: - Reachability targets
+
+enum ReachTarget {
+    static func parse(_ text: String) -> (host: String, port: UInt16)? {
+        let value = text.trimmingCharacters(in: .whitespaces)
+        var host = value, port: UInt16 = 443
+        if value.hasPrefix("[") {
+            guard let close = value.firstIndex(of: "]") else { return nil }
+            host = String(value[value.index(after: value.startIndex)..<close])
+            let rest = value[value.index(after: close)...]
+            if rest.hasPrefix(":") { guard let p = UInt16(rest.dropFirst()), p > 0 else { return nil }; port = p } else if !rest.isEmpty { return nil }
+            return host.range(of: "^[0-9A-Fa-f:.]+$", options: .regularExpression) == nil ? nil : (host, port)
+        }
+        let parts = value.split(separator: ":", omittingEmptySubsequences: false)
+        if parts.count == 2 { host = String(parts[0]); guard let p = UInt16(parts[1]), p > 0 else { return nil }; port = p }
+        else if parts.count > 2 { return nil }
+        guard !host.isEmpty, host.count < 254, !host.hasPrefix("-"), host.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else { return nil }
+        return (host, port)
+    }
+}
+
+// MARK: - Wi-Fi rules and launch target
+
+enum WiFiPolicy {
+    enum Action: Equatable { case none, connect, disconnect }
+    static func decide(enabled: Bool, ssid: String?, trusted: Set<String>, disconnectOnTrusted: Bool, vpnActive: Bool, suppressed: Bool) -> Action {
+        guard enabled, let ssid, !ssid.isEmpty else { return .none }
+        if trusted.contains(ssid) { return vpnActive && disconnectOnTrusted ? .disconnect : .none }
+        return vpnActive || suppressed ? .none : .connect
+    }
+}
+enum LaunchTarget {
+    // "favorite": the first starred connection, or the only connection there is.
+    static func pick(_ setting: String, profiles: [VPNProfile]) -> VPNProfile? {
+        let ready = profiles.filter { $0.unsupported == nil }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        switch setting {
+        case "": return nil
+        case "favorite": return ready.first { $0.favorite } ?? (ready.count == 1 ? ready[0] : nil)
+        default: return ready.first { $0.id.uuidString == setting || $0.name.caseInsensitiveCompare(setting) == .orderedSame }
+        }
+    }
+}

@@ -80,7 +80,7 @@ enum CredentialStore {
     }
 }
 
-enum TunnelState: String { case idle="Not connected", authorizing="Waiting for macOS", connecting="Connecting", authenticating="Authentication needed", connected="Connected", reconnecting="Reconnecting", stopping="Disconnecting", failed="Connection failed" }
+enum TunnelState: String { case idle="Not connected", authorizing="Waiting for macOS", connecting="Connecting", authenticating="Authentication needed", connected="Connected", reconnecting="Reconnecting", paused="Paused", stopping="Disconnecting", failed="Connection failed" }
 enum Preferences {
     static var autoReconnect:Bool {UserDefaults.standard.object(forKey:"autoReconnect") as? Bool ?? true}
     static var notifications:Bool {UserDefaults.standard.object(forKey:"notifications") as? Bool ?? true}
@@ -95,12 +95,112 @@ enum Notifier {
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier:UUID().uuidString,content:content,trigger:nil))
     }
 }
-struct SessionRecord: Codable { var start: Date; var end: Date? }
 struct ThroughputSample: Identifiable { let id=UUID(); let time: Date; let down: Double; let up: Double }
-enum SessionHistory {
-    private static func key(_ id:UUID)->String {"lastSession."+id.uuidString}
-    static func last(_ id:UUID)->SessionRecord? {UserDefaults.standard.data(forKey:key(id)).flatMap{try? JSONDecoder().decode(SessionRecord.self,from:$0)}}
-    static func record(_ value:SessionRecord,for id:UUID) {if let data=try? JSONEncoder().encode(value){UserDefaults.standard.set(data,forKey:key(id))}}
+enum PrivateFile {
+    // Write-then-rename in a 0700 folder; the file is created 0600 and never follows links.
+    @discardableResult static func write(_ data:Data,to file:URL)->Bool {
+        let directory=file.deletingLastPathComponent()
+        do {try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])}catch{return false}
+        let temp=directory.appendingPathComponent(".write-"+UUID().uuidString).path
+        let fd=open(temp,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0o600)
+        guard fd>=0 else{return false}
+        defer{close(fd);unlink(temp)}
+        let complete=data.withUnsafeBytes{ bytes -> Bool in
+            var written=0
+            while written<bytes.count {
+                let count=Darwin.write(fd,bytes.baseAddress!.advanced(by:written),bytes.count-written)
+                if count<0 && errno==EINTR{continue}
+                guard count>0 else{return false};written+=count
+            }
+            return true
+        }
+        return complete && rename(temp,file.path)==0
+    }
+}
+enum HistoryStore {
+    static var file:URL {FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("FortiBreak/history.json")}
+    static let limit=1000
+    static func load(from file:URL=HistoryStore.file)->[SessionEntry] {
+        guard let data=try? Data(contentsOf:file),data.count<5_000_000,let entries=try? JSONDecoder().decode([SessionEntry].self,from:data) else{return []}
+        return Array(entries.suffix(limit))
+    }
+    static func save(_ entries:[SessionEntry],to file:URL=HistoryStore.file) {if let data=try? JSONEncoder().encode(Array(entries.suffix(limit))){PrivateFile.write(data,to:file)}}
+}
+// Per-connection monitoring choices, kept outside profiles.json so older files still load.
+enum ProfileSettings {
+    static func healthHost(_ id:UUID)->String {UserDefaults.standard.string(forKey:"healthHost."+id.uuidString) ?? ""}
+    static func setHealthHost(_ value:String,_ id:UUID) {UserDefaults.standard.set(value.trimmingCharacters(in:.whitespaces),forKey:"healthHost."+id.uuidString)}
+    // 0 learns the gateway limit, -1 turns warnings off, anything else is minutes.
+    static func sessionLimitMinutes(_ id:UUID)->Int {UserDefaults.standard.integer(forKey:"sessionLimit."+id.uuidString)}
+    static func setSessionLimitMinutes(_ value:Int,_ id:UUID) {UserDefaults.standard.set(value,forKey:"sessionLimit."+id.uuidString)}
+}
+enum NetworkProbe {
+    enum TCP:Equatable { case open(Double), refused(Double), failed }
+    struct Reach { var address:String?; var interface:String?; var result:TCP }
+    static func run(_ path:String,_ arguments:[String],timeout:Double)->String {
+        let process=Process(),pipe=Pipe()
+        process.executableURL=URL(fileURLWithPath:path);process.arguments=arguments
+        process.standardOutput=pipe;process.standardError=FileHandle.nullDevice
+        guard (try? process.run()) != nil else{return ""}
+        let stop=DispatchWorkItem{if process.isRunning{process.terminate()}}
+        DispatchQueue.global().asyncAfter(deadline:.now()+timeout,execute:stop)
+        let data=pipe.fileHandleForReading.readDataToEndOfFile();process.waitUntilExit();stop.cancel()
+        return String(decoding:data.prefix(65536),as:UTF8.self)
+    }
+    static func addresses(_ host:String,port:UInt16)->[(sockaddr_storage,socklen_t)] {
+        var hints=addrinfo();hints.ai_family=AF_UNSPEC;hints.ai_socktype=SOCK_STREAM
+        var result:UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host,String(port),&hints,&result)==0 else{return []}
+        defer{freeaddrinfo(result)}
+        var list:[(sockaddr_storage,socklen_t)]=[],item=result
+        while let entry=item {var storage=sockaddr_storage();memcpy(&storage,entry.pointee.ai_addr,Int(entry.pointee.ai_addrlen));list.append((storage,entry.pointee.ai_addrlen));item=entry.pointee.ai_next}
+        return list
+    }
+    static func numeric(_ address:(sockaddr_storage,socklen_t))->String {
+        var storage=address.0,host=[CChar](repeating:0,count:Int(NI_MAXHOST))
+        _ = withUnsafePointer(to:&storage){$0.withMemoryRebound(to:sockaddr.self,capacity:1){getnameinfo($0,address.1,&host,socklen_t(host.count),nil,0,NI_NUMERICHOST)}}
+        return String(cString:host)
+    }
+    // A refused connection still proves the host answered through the route.
+    static func connect(_ address:(sockaddr_storage,socklen_t),timeout:Int32=3000)->TCP {
+        var storage=address.0
+        let fd=socket(Int32(storage.ss_family),SOCK_STREAM,0);guard fd>=0 else{return .failed};defer{close(fd)}
+        var noSignal:Int32=1;setsockopt(fd,SOL_SOCKET,SO_NOSIGPIPE,&noSignal,socklen_t(MemoryLayout<Int32>.size))
+        _ = fcntl(fd,F_SETFL,fcntl(fd,F_GETFL,0)|O_NONBLOCK)
+        let begin=DispatchTime.now().uptimeNanoseconds
+        let result=withUnsafePointer(to:&storage){$0.withMemoryRebound(to:sockaddr.self,capacity:1){Darwin.connect(fd,$0,address.1)}}
+        var failure:Int32=0
+        if result != 0 {
+            guard errno==EINPROGRESS else{return errno==ECONNREFUSED ? .refused(0) : .failed}
+            var item=pollfd(fd:fd,events:Int16(POLLOUT),revents:0)
+            guard poll(&item,1,timeout)>0 else{return .failed}
+            var length=socklen_t(MemoryLayout<Int32>.size);getsockopt(fd,SOL_SOCKET,SO_ERROR,&failure,&length)
+        }
+        let milliseconds=Double(DispatchTime.now().uptimeNanoseconds-begin)/1_000_000
+        return failure==0 ? .open(milliseconds) : failure==ECONNREFUSED ? .refused(milliseconds) : .failed
+    }
+    static func ping(_ host:String)->Double? {
+        let output=run("/sbin/ping",["-n","-c","1","-t","2",host],timeout:4)
+        guard let range=output.range(of:"time[=<]([0-9.]+) ms",options:.regularExpression) else{return nil}
+        return Double(output[range].dropFirst(5).dropLast(3))
+    }
+    static func routeInterface(_ address:String)->String? {
+        let output=run("/sbin/route",["-n","get",address],timeout:3)
+        return output.components(separatedBy:.newlines).first{$0.contains("interface:")}.map{$0.components(separatedBy:":").last!.trimmingCharacters(in:.whitespaces)}
+    }
+    static func reach(host:String,port:UInt16)->Reach {
+        guard let address=addresses(host,port:port).first else{return Reach(address:nil,interface:nil,result:.failed)}
+        let numeric=numeric(address)
+        return Reach(address:numeric,interface:routeInterface(numeric),result:connect(address))
+    }
+    // "host" pings; "host:port" times a TCP connection.
+    static func health(_ target:String)->Double? {
+        guard let parsed=ReachTarget.parse(target) else{return nil}
+        guard target.contains(":") else{return ping(parsed.host)}
+        guard let address=addresses(parsed.host,port:parsed.port).first else{return nil}
+        switch connect(address,timeout:2500) {case .open(let ms),.refused(let ms):return ms;case .failed:return nil}
+    }
+    static func vpnRoutes(_ interface:String)->[String] {TunnelLog.routes(netstat:run("/usr/sbin/netstat",["-rn","-f","inet"],timeout:3),interface:interface)}
 }
 struct LogLine: Identifiable, Codable {
     let id:UUID;let date:Date;let text:String
@@ -118,22 +218,7 @@ enum SessionDiagnostics {
         while data.count>1_000_000 && !kept.isEmpty {
             kept.removeFirst();guard let smaller=try? JSONEncoder().encode(kept) else{return};data=smaller
         }
-        let directory=file.deletingLastPathComponent()
-        do {try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])}catch{return}
-        let temp=directory.appendingPathComponent(".diagnostics-"+UUID().uuidString).path
-        let fd=open(temp,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0o600)
-        guard fd>=0 else{return}
-        defer{close(fd);unlink(temp)}
-        let complete=data.withUnsafeBytes{ bytes -> Bool in
-            var written=0
-            while written<bytes.count {
-                let count=write(fd,bytes.baseAddress!.advanced(by:written),bytes.count-written)
-                if count<0 && errno==EINTR{continue}
-                guard count>0 else{return false};written+=count
-            }
-            return true
-        }
-        if complete{_ = rename(temp,file.path)}
+        PrivateFile.write(data,to:file)
     }
     static func snapshot()->String {
         // Fixed, read-only system commands: no external probes or credentials.
@@ -176,7 +261,32 @@ private final class SessionChannel: @unchecked Sendable {
     @Published var history: [ThroughputSample] = []
     @Published var reconnectAttempt = 0
     @Published var helperInstalled = false
+    @Published var pausedUntil: Date?
+    @Published var sessionEndsAt: Date?
+    @Published var expiryWarning = false
+    @Published var health: [HealthSample] = []
+    @Published var quality: TunnelQuality = .measuring
+    @Published var healthTarget = ""
+    @Published var dnsServers: [String] = []
+    @Published var searchDomains: [String] = []
+    @Published var routes: [String] = []
+    @Published var sessions: [SessionEntry] = []
     var showWindow: (() -> Void)?
+    // automatic is true for reconnects, resumes and fresh sign-ins FortiBreak started itself.
+    var onConnected: ((VPNProfile, Bool) -> Void)?
+    var onUserDisconnect: (() -> Void)?
+    private enum Plan { case pause(Date), renew }
+    private var plan: Plan?
+    private var endReason: SessionEnd?
+    private var currentEntry: UUID?
+    private var automaticStart = false
+    private var resumeWork: DispatchWorkItem?
+    private var expiryWork: DispatchWorkItem?
+    private var healthTimer: Timer?
+    private var healthBusy = false
+    private var healthAuto = true
+    private var healthTCPFallback = false
+    private var stallReported = false
     private var channel: SessionChannel?
     private var sessionProfile: VPNProfile?
     private var reconnectProfile: VPNProfile?
@@ -189,7 +299,7 @@ private final class SessionChannel: @unchecked Sendable {
     @Published var helperStatus="Enable VPN helper once."
     private var installer:Process?
     init(){
-        if !CommandLine.arguments.contains("--preview"){logs=SessionDiagnostics.load()}
+        if !CommandLine.arguments.contains("--preview"){logs=SessionDiagnostics.load();loadHistory()}
         refreshHelperState()
         pathMonitor.pathUpdateHandler={[weak self] path in let up=path.status == .satisfied;Task{@MainActor in self?.networkUp=up}}
         pathMonitor.start(queue:.global(qos:.utility))
@@ -236,7 +346,7 @@ private final class SessionChannel: @unchecked Sendable {
     private var baseline: (UInt64,UInt64)?
     private var stopRequested=false
     var afterStop: (() -> Void)?
-    var busy: Bool { [.authorizing,.connecting,.authenticating,.connected,.reconnecting,.stopping].contains(state) }
+    var busy: Bool { [.authorizing,.connecting,.authenticating,.connected,.reconnecting,.paused,.stopping].contains(state) }
     var activeName: String? { activeProfile == nil ? nil : sessionProfile?.name }
     func bringForward() {
         NSApplication.shared.activate(ignoringOtherApps:true)
@@ -271,8 +381,8 @@ private final class SessionChannel: @unchecked Sendable {
         reconnectWork?.cancel();reconnectWork=nil;reconnectProfile=nil;reconnectAttempt=0
         start(profile,password:password,resuming:false)
     }
-    private func start(_ profile: VPNProfile, password: String, resuming: Bool) {
-        sessionProfile=profile
+    private func start(_ profile: VPNProfile, password: String, resuming: Bool, automatic: Bool = false, note: String? = nil) {
+        sessionProfile=profile;automaticStart=automatic || resuming;plan=nil;endReason=nil
         do {
             if try SystemFortiProfiles.hasActiveTunnel() {throw AppError("FortiClient is already connected. Disconnect it there first, then press Connect here.")}
             let request=ConnectRequest(profile:profile,password:password)
@@ -286,7 +396,7 @@ private final class SessionChannel: @unchecked Sendable {
             let fd: Int32
             do { fd=try UnixSocket.create(directory+"/control.sock",server:true) } catch { try? FileManager.default.removeItem(atPath:directory);throw error }
             let session=SessionChannel(directory:directory,server:fd);channel=session
-            activeProfile=profile.id;state = .connecting;statusDetail=resuming ? "Reconnecting (attempt \(reconnectAttempt) of \(ReconnectPolicy.delays.count))…" : "Starting the approved VPN helper…";prompt=nil;stopRequested=false;resetCounters()
+            activeProfile=profile.id;state = .connecting;statusDetail=note ?? (resuming ? "Reconnecting (attempt \(reconnectAttempt) of \(ReconnectPolicy.delays.count))…" : "Starting the approved VPN helper…");prompt=nil;stopRequested=false;resetCounters()
             if !resuming {logs=[]}
             log(resuming ? statusDetail : "Connection requested through the approved VPN helper.")
             log("Routing follows the gateway. Physical default route is preserved; macOS PPP manages DNS.")
@@ -345,18 +455,23 @@ private final class SessionChannel: @unchecked Sendable {
     private func receive(_ event:WireMessage,token:UUID) {
         guard channel?.token==token else{return}
         switch event.kind {
-        case "log":log(event.text)
+        case "log":log(event.text);absorb(event.text)
         case "started":log("VPN engine started. Certificate verification is enabled.")
         case "connected":
             guard !stopRequested else{return}
             state = .connected;statusDetail="VPN tunnel is up.";connectedAt=Date();clock=Date();prompt=nil
+            let automatic=automaticStart
             if let p=sessionProfile {
-                SessionHistory.record(SessionRecord(start:Date(),end:nil),for:p.id)
-                Notifier.post(reconnectAttempt>0 ? "VPN reconnected" : "VPN connected",p.name+" is connected.")
+                let entry=SessionEntry(profileID:p.id,profileName:p.name,start:Date())
+                sessions.append(entry);currentEntry=entry.id;HistoryStore.save(sessions)
+                Notifier.post(automatic ? "VPN reconnected" : "VPN connected",p.name+" is connected.")
             }
             reconnectProfile=sessionProfile;reconnectAttempt=0
             captureNetwork("VPN connected")
             timer=Timer.scheduledTimer(withTimeInterval:1,repeats:true){ [weak self] _ in Task { @MainActor in self?.tick() } }
+            if let p=sessionProfile {scheduleExpiry(p);onConnected?(p,automatic)}
+            startHealth()
+            DispatchQueue.main.asyncAfter(deadline:.now()+2){[weak self] in self?.refreshRoutes()}
         case "interface":if interfaceName != event.text{interfaceName=event.text;baseline=nil}
         case "prompt":
             guard !stopRequested else{return}
@@ -373,23 +488,156 @@ private final class SessionChannel: @unchecked Sendable {
     func respond(_ text:String){guard let fd=channel?.client,fd>=0 else{return};do{try UnixSocket.send(WireMessage(kind:"input",text:text),fd:fd);prompt=nil;state = .connecting;statusDetail="Checking authentication response…"}catch{finish(code:1,detail:error.localizedDescription)}}
     func disconnect() {
         guard busy else{return}
+        plan=nil;onUserDisconnect?()
+        if state == .paused {resumeWork?.cancel();resumeWork=nil;pausedUntil=nil;stopRequested=true;finish(code:0,detail:"Pause cancelled. The VPN stays off.");return}
         if state == .reconnecting {stopRequested=true;finish(code:0,detail:"Reconnect cancelled.");return}
+        endReason = .disconnected
+        stop()
+    }
+    private func stop() {
         stopRequested=true;prompt=nil;state = .stopping;statusDetail="Closing tunnel and restoring network settings…"
         if let session=channel,session.client>=0{try? UnixSocket.send(WireMessage(kind:"stop"),fd:session.client);log("Disconnect requested. Waiting for network cleanup.")}
         else{finish(code:0,detail:"Connection cancelled.")}
+    }
+    func pause(minutes:Int) {
+        guard state == .connected,sessionProfile != nil,(1...480).contains(minutes) else{return}
+        log("Pausing the VPN for \(minutes) minutes.")
+        plan = .pause(Date().addingTimeInterval(TimeInterval(minutes*60)));endReason = .paused;stop()
+    }
+    // A fresh sign-in restarts the gateway's session clock at a moment you choose.
+    func renewSession() {
+        guard state == .connected,sessionProfile != nil else{return}
+        log("Signing in again to start a fresh gateway session.")
+        plan = .renew;endReason = .renewed;stop()
+    }
+    func resumeNow() {guard state == .paused,let p=sessionProfile else{return};resumeWork?.cancel();resume(p)}
+    func lastSession(_ id:UUID)->SessionEntry? {sessions.last{$0.profileID==id}}
+    func learnedLimit(_ id:UUID)->TimeInterval? {SessionLimit.learn(from:sessions.filter{$0.profileID==id && $0.reason == .dropped}.map{$0.duration()})}
+    func sessionLimit(_ id:UUID)->TimeInterval? {
+        let minutes=ProfileSettings.sessionLimitMinutes(id)
+        return minutes<0 ? nil : minutes>0 ? TimeInterval(minutes*60) : learnedLimit(id)
+    }
+    // A session left open by a crash or force quit ends at the last time history was saved.
+    private func loadHistory() {
+        sessions=HistoryStore.load()
+        let saved=(try? FileManager.default.attributesOfItem(atPath:HistoryStore.file.path)[.modificationDate]) as? Date
+        guard sessions.contains(where:{$0.end == nil}) else{return}
+        for i in sessions.indices where sessions[i].end == nil {sessions[i].end=max(sessions[i].start,saved ?? sessions[i].start);sessions[i].reason = .disconnected}
+        HistoryStore.save(sessions)
+    }
+    func clearHistory(){sessions=sessions.filter{$0.id==currentEntry};HistoryStore.save(sessions)}
+    func refreshRoutes() {
+        guard state == .connected,interfaceName != "—",!CommandLine.arguments.contains("--preview") else{return}
+        let interface=interfaceName
+        DispatchQueue.global(qos:.utility).async{[weak self] in
+            let found=NetworkProbe.vpnRoutes(interface)
+            Task{@MainActor in guard let self,self.interfaceName==interface else{return};self.routes=found}
+        }
+    }
+    private func absorb(_ line:String) {
+        let servers=TunnelLog.dnsServers(line)
+        if !servers.isEmpty {dnsServers=servers;searchDomains=TunnelLog.searchDomains(line)}
+    }
+    private func closeEntry(_ reason:SessionEnd) {
+        guard let id=currentEntry,let i=sessions.firstIndex(where:{$0.id==id}) else{return}
+        let known=sessionProfile.flatMap{learnedLimit($0.id)}
+        sessions[i].end=Date();sessions[i].received=received;sessions[i].sent=sent;sessions[i].reason=reason
+        currentEntry=nil;HistoryStore.save(sessions)
+        if reason == .dropped,known==nil,let p=sessionProfile,let learned=learnedLimit(p.id) {
+            log("Learned the gateway's session limit for \(p.name): about \(Int(learned/3600)) h \(Int(learned/60)%60) min. FortiBreak now warns 10 minutes before it ends.")
+        }
+    }
+    private func scheduleExpiry(_ p:VPNProfile) {
+        expiryWork?.cancel();expiryWarning=false
+        guard let limit=sessionLimit(p.id),let start=connectedAt else{sessionEndsAt=nil;return}
+        let ends=start.addingTimeInterval(limit);sessionEndsAt=ends
+        let work=DispatchWorkItem{[weak self] in Task{@MainActor in self?.warnExpiry(p)}}
+        expiryWork=work
+        // Wall-clock deadline, so time asleep still counts toward the gateway's limit.
+        DispatchQueue.main.asyncAfter(wallDeadline:.now()+max(1,ends.addingTimeInterval(-SessionLimit.warningLead).timeIntervalSinceNow),execute:work)
+    }
+    private func warnExpiry(_ p:VPNProfile) {
+        guard state == .connected,let ends=sessionEndsAt else{return}
+        expiryWarning=true
+        let when=ends.formatted(date:.omitted,time:.shortened)
+        log("The gateway session for \(p.name) is expected to end around \(when).")
+        Notifier.post("VPN session ends soon",p.name+" will disconnect around "+when+". Sign in again now to choose the moment.")
+    }
+    private func startHealth() {
+        stopHealth();health=[];quality = .measuring;stallReported=false;healthTCPFallback=false
+        healthTimer=Timer.scheduledTimer(withTimeInterval:HealthPolicy.interval,repeats:true){[weak self] _ in Task{@MainActor in self?.checkHealth()}}
+        checkHealth()
+    }
+    private func stopHealth(){healthTimer?.invalidate();healthTimer=nil;healthBusy=false}
+    private func healthTargetNow()->String? {
+        guard let p=sessionProfile else{return nil}
+        let custom=ProfileSettings.healthHost(p.id)
+        if !custom.isEmpty {healthAuto=false;return ReachTarget.parse(custom) == nil ? nil : custom}
+        healthAuto=true
+        // Some DNS servers ignore ping; TCP port 53 takes over once ping never answered.
+        return dnsServers.first.map{healthTCPFallback ? $0+":53" : $0}
+    }
+    private func checkHealth() {
+        guard state == .connected,!healthBusy else{return}
+        guard let target=healthTargetNow() else{healthTarget="";quality = .unavailable;return}
+        healthTarget=target;healthBusy=true
+        let token=channel?.token
+        DispatchQueue.global(qos:.utility).async{[weak self] in
+            let latency=NetworkProbe.health(target)
+            Task{@MainActor in
+                guard let self else{return}
+                self.healthBusy=false
+                guard self.state == .connected,self.channel?.token==token,self.healthTarget==target else{return}
+                self.health.append(HealthSample(time:Date(),latency:latency));if self.health.count>120{self.health.removeFirst(self.health.count-120)}
+                if self.healthAuto,!self.healthTCPFallback,self.health.count>=3,!self.health.contains(where:{$0.latency != nil}) {
+                    self.healthTCPFallback=true;self.health=[];self.log("The gateway's DNS server ignores ping. Health checks now time TCP port 53.");return
+                }
+                self.quality=HealthPolicy.quality(self.health)
+                if HealthPolicy.shouldRestart(self.health),self.networkUp {self.tunnelStalled()}
+            }
+        }
+    }
+    private func tunnelStalled() {
+        guard !stallReported else{return}
+        stallReported=true
+        let name=sessionProfile?.name ?? "The VPN"
+        log("Tunnel stalled: \(healthTarget) has not answered for about \(HealthPolicy.restartAfter*Int(HealthPolicy.interval)) seconds.")
+        guard Preferences.autoReconnect,let session=channel,session.client>=0 else{
+            Notifier.post("VPN looks stalled",name+" stopped answering. Disconnect and connect again if it does not recover.");return
+        }
+        Notifier.post("VPN stalled",name+" stopped answering. FortiBreak is restarting the tunnel.")
+        // Not a user stop, so the normal reconnect path takes over when the engine exits.
+        endReason = .stalled;stopHealth();state = .stopping;statusDetail="Tunnel stalled. Restarting it…"
+        try? UnixSocket.send(WireMessage(kind:"stop"),fd:session.client)
     }
     private func finish(code:Int32,detail:String?=nil) {
         let wasStopped=stopRequested,wasConnected=connectedAt != nil
         timer?.invalidate();timer=nil;prompt=nil;connectedAt=nil
         reconnectWork?.cancel();reconnectWork=nil
+        stopHealth();expiryWork?.cancel();expiryWork=nil;sessionEndsAt=nil;expiryWarning=false
         if let session=channel {
             channel=nil
             if session.client>=0{shutdown(session.client,SHUT_RDWR)}
             shutdown(session.server,SHUT_RDWR);close(session.server)
             try? FileManager.default.removeItem(atPath:session.directory)
         }
-        if wasConnected,let p=sessionProfile,var last=SessionHistory.last(p.id),last.end==nil {last.end=Date();SessionHistory.record(last,for:p.id)}
+        if wasConnected {closeEntry(wasStopped ? (endReason ?? .disconnected) : endReason == .stalled ? .stalled : .dropped)}
+        endReason=nil
         let ended=detail ?? (wasStopped ? "Disconnected. VPN process stopped." : code==0 ? "VPN session ended." : "VPN engine exited (\(code)). Open Activity for details.")
+        if wasStopped,let next=plan,let profile=sessionProfile {
+            plan=nil;log(ended)
+            switch next {
+            case .pause(let until):
+                state = .paused;pausedUntil=until;resetCounters()
+                statusDetail="Paused until "+until.formatted(date:.omitted,time:.shortened)+". The VPN resumes automatically."
+                log(statusDetail);Notifier.post("VPN paused",profile.name+" resumes at "+until.formatted(date:.omitted,time:.shortened)+".")
+                scheduleResume(profile,at:until)
+            case .renew:
+                state = .idle;reconnectProfile=nil;reconnectAttempt=0
+                start(profile,password:CredentialStore.password(profile.id),resuming:true,automatic:true,note:"Signing in again…")
+            }
+            return
+        }
         if let profile=reconnectProfile,let delay=ReconnectPolicy.delay(enabled:Preferences.autoReconnect,wasConnected:true,userStopped:wasStopped,attempt:reconnectAttempt) {
             // Keep the profile active so the window and menu bar stay on this connection.
             state = .reconnecting;resetCounters()
@@ -413,6 +661,20 @@ private final class SessionChannel: @unchecked Sendable {
         reconnectWork=work
         DispatchQueue.main.asyncAfter(deadline:.now()+delay,execute:work)
     }
+    private func scheduleResume(_ profile:VPNProfile,at date:Date) {
+        resumeWork?.cancel()
+        let work=DispatchWorkItem{[weak self] in Task{@MainActor in self?.resume(profile)}}
+        resumeWork=work
+        DispatchQueue.main.asyncAfter(wallDeadline:.now()+max(0.5,date.timeIntervalSinceNow),execute:work)
+    }
+    private func resume(_ profile:VPNProfile) {
+        guard state == .paused else{return}
+        resumeWork=nil
+        guard networkUp else{statusDetail="Pause ended. Waiting for a network connection…";scheduleResume(profile,at:Date().addingTimeInterval(5));return}
+        pausedUntil=nil;log("Pause ended. Connecting \(profile.name) again.");Notifier.post("VPN resuming",profile.name+" is connecting again.")
+        state = .idle;reconnectProfile=nil;reconnectAttempt=0
+        start(profile,password:CredentialStore.password(profile.id),resuming:true,automatic:true,note:"Resuming after the pause…")
+    }
     private func attemptReconnect(_ profile:VPNProfile) {
         guard state == .reconnecting,!stopRequested else{return}
         // Waiting for Wi-Fi or wake does not use up an attempt.
@@ -428,10 +690,32 @@ private final class SessionChannel: @unchecked Sendable {
         received=48_213_442;sent=6_120_331;receiveRate=182_400;sendRate=21_700
         let start=Date().addingTimeInterval(-4530)
         logs=["Connection requested through the approved VPN helper.","VPN engine started. Certificate verification is enabled.","Before VPN startup\n/usr/sbin/netstat -rn -f inet\nDestination        Gateway            Flags  Netif\ndefault            192.168.1.1        UGScg  en0","INFO:   Listening for SAML login on port 8020","Browser sign-in opened. Callback is 127.0.0.1:8020; listener waits up to about 50 seconds.","INFO:   Connected to gateway.","INFO:   Got addresses: [10.212.134.27], ns [10.0.0.53]","INFO:   Tunnel is up and running.","WARN:   Could not resolve an optional split-DNS domain."].enumerated().map{LogLine(date:start.addingTimeInterval(Double($0.offset)*1.5),text:$0.element)}
+        let day:TimeInterval=86_400,calendar=Calendar.current,today=calendar.startOfDay(for:Date())
+        let minutes:[Double]=[480,252,460,125,480,390,45,200,300]
+        let reasons:[SessionEnd]=[.dropped,.disconnected,.disconnected,.stalled,.dropped,.paused,.disconnected,.renewed,.disconnected]
+        var sample:[SessionEntry]=[]
+        for i in 0..<minutes.count {
+            let daysBack=Double(i/2+(i%3==0 ? 1 : 0))
+            let begin:Date=today.addingTimeInterval(-daysBack*day+Double(8+i%3)*3_600+Double(i*7%40)*60)
+            let length:Double=minutes[i]*60
+            sample.append(SessionEntry(profileID:profile.id,profileName:profile.name,start:begin,end:begin.addingTimeInterval(length),received:UInt64(length*41_000),sent:UInt64(length*6_300),reason:reasons[i]))
+        }
+        sessions=sample.sorted{$0.start<$1.start}+[SessionEntry(profileID:profile.id,profileName:profile.name,start:Date().addingTimeInterval(-4523))]
+        dnsServers=["10.0.0.50","10.0.0.40"];searchDomains=["corp.example.com"];healthTarget="10.0.0.50"
+        routes=["10.0.0.0/16","10.1.0.0/16","10.2.0.0/16","10.5.0.0/16","172.29.0.0/16","192.168.50.0/24","192.168.60.0/24"]
+        var samples:[HealthSample]=[]
+        for i in 0..<40 {
+            let latency:Double?=i==23 ? nil : 18+9*sin(Double(i)/3)+Double(i%5)*1.5
+            samples.append(HealthSample(time:Date().addingTimeInterval(Double(i-40)*5),latency:latency))
+        }
+        health=samples;quality = .good
+        sessionEndsAt=connectedAt?.addingTimeInterval(8*3_600)
+        if CommandLine.arguments.contains("--preview-expiring") {sessionEndsAt=Date().addingTimeInterval(540);expiryWarning=true}
+        if CommandLine.arguments.contains("--preview-paused") {state = .paused;pausedUntil=Date().addingTimeInterval(1_500);statusDetail="Paused until "+pausedUntil!.formatted(date:.omitted,time:.shortened)+". The VPN resumes automatically.";connectedAt=nil;return}
         if CommandLine.arguments.contains("--preview-connecting") {state = .connecting;statusDetail="Complete browser sign-in within about 50 seconds.";connectedAt=nil;return}
         history=(0..<60).map{i in let t=Double(i);return ThroughputSample(time:Date().addingTimeInterval(t-60),down:max(4_000,150_000+80_000*sin(t/6)+40_000*sin(t/2.3)+(i>40 ? 90_000 : 0)),up:max(1_000,22_000+12_000*sin(t/4)+6_000*cos(t/1.7)))}
     }
-    private func resetCounters(){history=[];baseline=nil;lastTotals=nil;interfaceName="—";vpnAddress="—";received=0;sent=0;receiveRate=0;sendRate=0}
+    private func resetCounters(){health=[];quality = .measuring;healthTarget="";dnsServers=[];searchDomains=[];routes=[];history=[];baseline=nil;lastTotals=nil;interfaceName="—";vpnAddress="—";received=0;sent=0;receiveRate=0;sendRate=0}
     private func tick(){
         clock=Date();guard interfaceName != "—" else{return}
         var addresses:UnsafeMutablePointer<ifaddrs>?;guard getifaddrs(&addresses)==0 else{return};defer{freeifaddrs(addresses)}
