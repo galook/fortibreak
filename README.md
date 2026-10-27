@@ -4,6 +4,8 @@ A small native macOS client for Fortinet SSL VPN, built on [openfortivpn](https:
 Connect with a password and MFA or with browser SSO (SAML), from a window or the menu bar,
 without FortiClient.
 
+Read the **[user guide](https://galook.github.io/fortibreak/)** for setup, everyday use and troubleshooting.
+
 FortiBreak is an independent project. It is not made by, affiliated with or endorsed by Fortinet.
 
 ## Install
@@ -171,6 +173,12 @@ workflow artifact. To publish a release:
 
 The workflow builds the tagged commit and publishes `FortiBreak-X.Y.Z.zip` with its SHA-256. The
 release notes combine that changelog section, install steps and the commits since the previous tag.
+
+## User guide
+
+The user guide is a static page in [docs/](docs/). The User guide workflow publishes it to
+[GitHub Pages](https://galook.github.io/fortibreak/) whenever `docs/` changes on main. Its
+screenshots come from the design preview (`--preview`), so they show sample data only.
 
 ## License notes
 
