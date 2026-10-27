@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>FortiBreak User Guide</title>
+<meta name="description" content="How to install FortiBreak, connect to a Fortinet SSL VPN, and use pause, tunnel health, history, Wi-Fi rules, shortcuts and links.">
+<meta name="theme-color" content="#F3F5FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0F1C" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="img/icon.png">
+<link rel="apple-touch-icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Nunito:wght@700;800;900&display=swap">
+<style>
+/* Layout: a Mac help book. Sticky contents rail on the left, one reading column, real screenshots set in the app's own state-colored glow. */
+:root {
+  /* Neutrals lean toward the icon's gate blue. */
+  --bg: #F3F5FA;
+  --surface: #FFFFFF;
+  --sunk: #E8ECF6;
+  --ink: #121729;
+  --muted: #535D78;
+  --faint: #6B7490;
+  --line: #DADFEC;
+  /* Brand: the icon's blue gradient and its mint dots. */
+  --accent: #2D5BE8;
+  --accent-strong: #1D3CB4;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E3EAFF;
+  --mint: #0B7F5E;
+  --caution: #B38600;
+  /* The app's state colors. Semantic, separate from the accent. */
+  --ok: #1E9A53;
+  --busy: #D9700C;
+  --pause: #A13ECD;
+  --bad: #D3373D;
+  --warn-soft: #FFF1E0;
+  --code-bg: #121830;
+  --code-ink: #E3E9F8;
+  --code-dim: #8C97B8;
+  --header-bg: rgb(243 245 250 / 0.82);
+  --shadow: 0 1px 2px rgb(18 23 41 / 0.06), 0 18px 40px -18px rgb(18 23 41 / 0.28);
+  --show-light: block;
+  --show-dark: none;
+
+  --f-display: ui-rounded, "Nunito", "SF Pro Rounded", system-ui, sans-serif;
+  --f-body: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --step--1: 0.84rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.25rem;
+  --step-2: 1.6rem;
+  --step-3: 2.05rem;
+  --step-4: clamp(2.5rem, 6vw, 3.9rem);
+  --header-h: 58px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B0F1C; --surface: #131A2C; --sunk: #1A2237; --ink: #E7EBF6; --muted: #9DA6C0; --faint: #6E7895; --line: #252F4C;
+    --accent: #819EFF; --accent-strong: #AABDFF; --accent-ink: #0B0F1C; --accent-soft: #1B2650; --mint: #6FF0C2; --caution: #F2C94C;
+    --ok: #4FCB7E; --busy: #FFA04A; --pause: #D27DFF; --bad: #FF6C70; --warn-soft: #33240F;
+    --code-bg: #0E1426; --code-ink: #E3E9F8; --code-dim: #7D88A8;
+    --header-bg: rgb(11 15 28 / 0.8);
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 22px 48px -18px rgb(0 0 0 / 0.75);
+    --show-light: none; --show-dark: block;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B0F1C; --surface: #131A2C; --sunk: #1A2237; --ink: #E7EBF6; --muted: #9DA6C0; --faint: #6E7895; --line: #252F4C;
+  --accent: #819EFF; --accent-strong: #AABDFF; --accent-ink: #0B0F1C; --accent-soft: #1B2650; --mint: #6FF0C2; --caution: #F2C94C;
+  --ok: #4FCB7E; --busy: #FFA04A; --pause: #D27DFF; --bad: #FF6C70; --warn-soft: #33240F;
+  --code-bg: #0E1426; --code-ink: #E3E9F8; --code-dim: #7D88A8;
+  --header-bg: rgb(11 15 28 / 0.8);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 22px 48px -18px rgb(0 0 0 / 0.75);
+  --show-light: none; --show-dark: block;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 16px); }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: var(--step-0);
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--header-bg);
+}
+a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a:hover { color: var(--accent-strong); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 800; text-wrap: balance; color: var(--ink); }
+h2 { font-size: var(--step-3); line-height: 1.15; letter-spacing: -0.015em; margin: 0 0 0.6em; }
+h3 { font-size: var(--step-1); line-height: 1.3; margin: 2em 0 0.5em; }
+p, ul, ol, dl { margin: 0 0 1em; }
+p, li, dd { max-width: 66ch; }
+strong { font-weight: 650; }
+code, kbd { font-family: var(--f-mono); font-size: 0.86em; }
+:not(pre) > code { background: var(--sunk); border-radius: 6px; padding: 0.1em 0.38em; overflow-wrap: anywhere; }
+kbd {
+  display: inline-block; min-width: 1.7em; text-align: center; padding: 0.08em 0.42em; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1.5px 0 var(--line); font-size: 0.82em; font-weight: 500; white-space: nowrap;
+}
+.ui { font-weight: 650; }
+
+/* Header */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; height: var(--header-h);
+  background: var(--header-bg); backdrop-filter: saturate(1.6) blur(16px); -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  border-bottom: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.top-in { max-width: 1240px; margin: 0 auto; height: 100%; display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-family: var(--f-display); font-weight: 800; font-size: 1.08rem; }
+.brand img { width: 30px; height: 30px; }
+.brand span { color: var(--muted); font-weight: 700; }
+.top-links { margin-left: auto; display: flex; gap: 4px; align-items: center; font-size: 0.94rem; }
+.top-links a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
+.top-links a:hover { color: var(--ink); background: var(--sunk); }
+.ver { font-family: var(--f-mono); font-size: 0.78rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* Hero */
+.hero { position: relative; overflow: hidden; padding-block: 64px 0; }
+.hero-in { max-width: 1140px; margin: 0 auto; position: relative; }
+.hero-copy { max-width: 760px; }
+.eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: var(--step--1); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 18px; }
+.eyebrow img { width: 40px; height: 40px; }
+.hero h1 { font-size: var(--step-4); line-height: 1.02; letter-spacing: -0.03em; margin: 0 0 20px; }
+.hero h1 em { font-style: normal; color: var(--ok); }
+.lead { font-size: var(--step-1); line-height: 1.5; color: var(--muted); max-width: 58ch; margin: 0 0 28px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 22px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 999px; font-weight: 650; font-size: 1rem;
+  text-decoration: none; border: 1px solid transparent; cursor: pointer; font-family: var(--f-body);
+}
+.btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { background: var(--accent-strong); color: var(--accent-ink); }
+.btn-ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.btn-ghost:hover { color: var(--ink); border-color: var(--faint); }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 0; list-style: none; color: var(--muted); font-size: 0.95rem; margin: 0; }
+.facts li { display: flex; align-items: center; gap: 8px; }
+.facts li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--mint); flex: none; }
+
+.hero-shot { position: relative; margin: 52px auto 0; max-width: 1040px; }
+.hero-shot::before {
+  content: ""; position: absolute; left: 50%; top: -12%; width: 120%; aspect-ratio: 1.6; transform: translateX(-50%);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--ok) 30%, transparent), color-mix(in srgb, var(--ok) 8%, transparent) 55%, transparent);
+  pointer-events: none;
+}
+.hero-shot img { position: relative; width: 100%; height: auto; border-radius: 2.1% / 2.763%; box-shadow: var(--shadow); }
+.hero-shot figcaption { position: relative; text-align: center; color: var(--muted); font-size: var(--step--1); margin-top: 14px; }
+
+/* Theme-matched screenshots */
+.lt { display: var(--show-light); }
+.dk { display: var(--show-dark); }
+
+/* What's new */
+.new { max-width: 1140px; margin: 56px auto 0; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; padding-block: 28px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.new h2 { font-size: var(--step-1); margin: 0; }
+.new h2 small { display: block; font-family: var(--f-body); font-weight: 500; font-size: var(--step--1); color: var(--muted); margin-top: 4px; }
+.new ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 28px; }
+.new li { font-size: 0.97rem; color: var(--muted); }
+.new li a { color: var(--ink); font-weight: 650; text-decoration: none; }
+.new li a:hover { color: var(--accent); }
+
+/* Body layout */
+.layout { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 64px; padding-block: 24px 80px; }
+.toc { position: sticky; top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 24px); align-self: start; max-height: calc(100vh - var(--header-h) - 48px); overflow-y: auto; padding-top: 32px; font-size: 0.93rem; }
+.toc summary { display: none; }
+.toc-group { margin: 0 0 18px; }
+.toc-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); margin: 0 0 6px; }
+.toc ul { list-style: none; margin: 0; padding: 0; }
+.toc a { display: block; padding: 4px 10px; margin-left: -10px; border-radius: 7px; color: var(--muted); text-decoration: none; line-height: 1.35; }
+.toc a:hover { color: var(--ink); background: var(--sunk); }
+.toc a[aria-current="true"] { color: var(--ink); background: var(--accent-soft); font-weight: 600; }
+
+article { min-width: 0; max-width: 800px; }
+article > section { padding-block: 40px 16px; border-top: 1px solid var(--line); }
+article > section:first-child { border-top: 0; }
+.kicker { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mint); margin: 0 0 8px; }
+.intro { font-size: 1.12rem; color: var(--muted); }
+
+/* Figures */
+figure { margin: 26px 0 28px; }
+.shot img { width: 100%; height: auto; box-shadow: var(--shadow); border-radius: 12px; }
+.shot img.win { border-radius: 2.1% / 2.763%; }
+.shot img.settings { border-radius: 4% / 4%; }
+.shot figcaption, .cap { color: var(--muted); font-size: var(--step--1); margin-top: 12px; }
+
+/* Steps */
+.steps { list-style: none; padding: 0; counter-reset: step; display: grid; gap: 22px; margin: 24px 0 28px; }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 16px; max-width: none; }
+.steps > li::before {
+  content: counter(step); width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--f-display); font-weight: 800; color: var(--accent); background: var(--accent-soft);
+}
+.steps > li > div { min-width: 0; padding-top: 6px; }
+.steps p { margin: 0 0 0.5em; }
+
+/* Code */
+.code { position: relative; background: var(--code-bg); color: var(--code-ink); border-radius: 12px; margin: 12px 0 16px; }
+.code pre { margin: 0; padding: 16px 92px 16px 18px; overflow-x: auto; font-family: var(--f-mono); font-size: 0.86rem; line-height: 1.65; }
+.code .c { color: var(--code-dim); }
+.copy {
+  position: absolute; top: 10px; right: 10px; font: 600 0.78rem var(--f-body); color: var(--code-ink); background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.14); border-radius: 7px; padding: 5px 10px; cursor: pointer;
+}
+.copy:hover { background: rgb(255 255 255 / 0.16); }
+.copy.done { color: var(--mint); }
+
+/* Notes */
+.note { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; padding: 14px 18px; border-radius: 12px; background: var(--accent-soft); margin: 18px 0 22px; font-size: 0.98rem; }
+.note.warn { background: var(--warn-soft); }
+.note svg { width: 20px; height: 20px; margin-top: 3px; color: var(--accent); }
+.note.warn svg { color: var(--busy); }
+.note p { margin: 0 0 0.4em; }
+.note p:last-child { margin: 0; }
+
+/* Ways to add / connect */
+.ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 22px 0 26px; }
+.way { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; min-width: 0; }
+.way h4 { margin: 0 0 6px; font-size: 1rem; font-family: var(--f-body); font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.way p { margin: 0; font-size: 0.95rem; color: var(--muted); }
+
+/* State tiles */
+.states { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 24px 0 14px; }
+.state { margin: 0; min-width: 0; }
+.state img { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); }
+.state figcaption { margin-top: 10px; font-size: 0.92rem; color: var(--muted); line-height: 1.45; }
+.state figcaption b { display: flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 700; margin-bottom: 2px; font-size: 0.98rem; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent); }
+.other-states { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 24px; padding: 0; list-style: none; font-size: 0.95rem; color: var(--muted); margin: 6px 0 24px; }
+.other-states li { display: flex; gap: 10px; align-items: baseline; }
+.other-states b { color: var(--ink); }
+
+/* Definition lists */
+.defs { display: grid; grid-template-columns: minmax(130px, 190px) minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); margin: 18px 0 24px; }
+.defs dt, .defs dd { padding: 12px 0; border-bottom: 1px solid var(--line); margin: 0; }
+.defs dt { font-weight: 650; padding-right: 18px; }
+.defs dd { color: var(--muted); max-width: none; }
+
+/* Health ladder */
+.ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 22px 0 22px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: var(--surface); }
+.rung { padding: 16px; border-left: 1px solid var(--line); min-width: 0; }
+.rung:first-child { border-left: 0; }
+.rung b { display: flex; align-items: center; gap: 8px; font-size: 0.98rem; margin-bottom: 6px; }
+.rung p { margin: 0; font-size: 0.9rem; color: var(--muted); line-height: 1.45; }
+.rung .meter { height: 4px; border-radius: 4px; background: var(--c); margin-bottom: 12px; opacity: 0.85; }
+
+/* Reconnect timeline */
+.timeline { margin: 26px 0 10px; padding: 46px 0 46px; position: relative; }
+.track { position: relative; height: 30px; border-radius: 8px; display: flex; overflow: hidden; background: var(--sunk); }
+.seg { display: grid; place-items: center; font-size: 0.74rem; font-weight: 600; color: var(--busy); background: color-mix(in srgb, var(--busy) var(--a), transparent); border-right: 2px solid var(--bg); min-width: 0; white-space: nowrap; }
+.mark { position: absolute; top: 46px; height: 30px; width: 2px; background: var(--ink); }
+.lab { position: absolute; font-size: 0.82rem; line-height: 1.3; white-space: nowrap; color: var(--muted); }
+.lab b { color: var(--ink); font-weight: 650; display: block; }
+.lab.up { top: 0; }
+.lab.down { top: 84px; }
+.lab.end { transform: translateX(-100%); text-align: right; }
+.axis { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 0.72rem; color: var(--faint); margin-top: 6px; }
+
+/* Tables */
+.table { overflow-x: auto; margin: 16px 0 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); font-weight: 700; background: var(--sunk); }
+td { color: var(--muted); }
+td:first-child { color: var(--ink); }
+.nowrap td code { white-space: nowrap; }
+.linkcell { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.mini-copy { font: 600 0.74rem var(--f-body); color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; flex: none; }
+.mini-copy:hover { border-color: var(--accent); }
+.mini-copy.done { color: var(--ok); border-color: var(--ok); }
+
+/* Reachability results */
+.results { display: grid; gap: 8px; margin: 14px 0 24px; padding: 0; list-style: none; }
+.results li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; max-width: none; }
+.results .ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--surface); font-size: 0.8rem; font-weight: 800; background: var(--c); margin-top: 1px; }
+.results q { quotes: none; font-family: var(--f-mono); font-size: 0.84rem; color: var(--ink); display: block; }
+.results span { color: var(--muted); font-size: 0.94rem; }
+
+.pills { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; list-style: none; margin: 12px 0 22px; }
+.pills li { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 0.9rem; }
+
+/* Split: text beside a screenshot */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr); gap: 32px; align-items: start; margin: 22px 0 10px; }
+.split figure { margin: 0; }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin: 24px 0; align-items: start; }
+.trio figure { margin: 0; }
+.trio h3 { margin: 16px 0 6px; font-size: 1.05rem; }
+.trio ul { padding-left: 1.1em; font-size: 0.93rem; color: var(--muted); margin: 0; }
+.trio li { margin-bottom: 6px; }
+
+/* Diagram */
+.flow { display: grid; grid-template-columns: repeat(7, auto); align-items: center; justify-content: start; gap: 10px; margin: 22px 0 22px; overflow-x: auto; padding-bottom: 4px; }
+.node { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 128px; }
+.node b { display: block; font-size: 0.95rem; }
+.node span { font-size: 0.8rem; color: var(--muted); }
+.node.root { border-color: var(--accent); background: var(--accent-soft); }
+.arrow { color: var(--faint); font-size: 1.1rem; text-align: center; }
+.arrow small { display: block; font-size: 0.66rem; letter-spacing: 0.04em; text-transform: uppercase; }
+
+/* FAQ */
+.faq details { border-bottom: 1px solid var(--line); }
+.faq details:first-of-type { border-top: 1px solid var(--line); }
+.faq summary { cursor: pointer; padding: 15px 30px 15px 0; font-weight: 650; list-style: none; position: relative; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; position: absolute; right: 4px; top: 12px; font-size: 1.3rem; color: var(--faint); font-weight: 400; }
+.faq details[open] summary::after { content: "–"; }
+.faq details > div { padding: 0 0 16px; color: var(--muted); }
+.faq details > div p:last-child { margin-bottom: 0; }
+
+footer { border-top: 1px solid var(--line); padding-block: 36px 48px; color: var(--muted); font-size: 0.9rem; }
+footer .in { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+footer p { margin: 0 0 0.6em; max-width: 60ch; }
+footer b { color: var(--ink); }
+
+/* Narrow screens */
+@media (max-width: 980px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 8px; }
+  .toc { position: static; max-height: none; padding-top: 24px; }
+  .toc summary { display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-weight: 700; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); list-style: none; }
+  .toc summary::-webkit-details-marker { display: none; }
+  .toc summary::after { content: "▾"; color: var(--faint); }
+  .toc[open] summary { margin-bottom: 14px; }
+  .toc-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 24px; padding: 0 4px; }
+  .states { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rung:nth-child(3) { border-left: 0; }
+  .rung:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .trio { grid-template-columns: minmax(0, 1fr); }
+  .trio figure img { max-width: 520px; }
+}
+@media (max-width: 720px) {
+  .top-links .hide-sm { display: none; }
+  .hero { padding-top: 40px; }
+  .new { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .defs { grid-template-columns: minmax(0, 1fr); }
+  .defs dt { padding-bottom: 2px; border-bottom: 0; }
+  .defs dd { padding-top: 0; }
+  footer .in { grid-template-columns: minmax(0, 1fr); }
+  .table thead { display: none; }
+  .table table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+  .table tr { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .table tr:last-child { border-bottom: 0; }
+  .table td { border: 0; padding: 2px 0; }
+  .table td:first-child { font-weight: 650; }
+  .nowrap td code { white-space: normal; }
+  h2 { font-size: var(--step-2); }
+  .flow { grid-template-columns: minmax(0, 1fr); justify-content: stretch; }
+  .arrow { transform: rotate(90deg); }
+  .arrow small { transform: rotate(-90deg); }
+}
+@media (max-width: 460px) {
+  .ladder { grid-template-columns: minmax(0, 1fr); }
+  .rung { border-left: 0; }
+  .rung:nth-child(n+2) { border-top: 1px solid var(--line); }
+  .brand span { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#top"><img src="img/icon.png" alt="" width="30" height="30">FortiBreak <span>User Guide</span></a>
+    <nav class="top-links" aria-label="Quick links">
+      <a class="hide-sm" href="#install">Install</a>
+      <a class="hide-sm" href="#troubleshooting">Troubleshooting</a>
+      <a href="https://github.com/galook/fortibreak/releases" target="_blank" rel="noopener">Releases ↗</a>
+      <span class="ver">v0.5.1</span>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero wrap">
+    <div class="hero-in">
+      <div class="hero-copy">
+        <p class="eyebrow"><img src="img/icon.png" alt="" width="40" height="40">FortiBreak for Mac · User Guide</p>
+        <h1>Your Fortinet VPN, <em>one click</em> away.</h1>
+        <p class="lead">FortiBreak is a small native macOS app for Fortinet SSL VPN. Sign in with a password and code or through your browser, and connect from the window, the menu bar or a keyboard shortcut. No FortiClient needed.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="#install">Install in four steps</a>
+          <a class="btn btn-ghost" href="https://github.com/galook/fortibreak/releases" target="_blank" rel="noopener">Download the latest release ↗</a>
+        </div>
+        <ul class="facts">
+          <li>Mac with Apple Silicon</li>
+          <li>Version 0.5.1 needs macOS 27</li>
+          <li>Built on openfortivpn</li>
+          <li>Independent project, not made by Fortinet</li>
+        </ul>
+      </div>
+      <figure class="hero-shot">
+        <img class="lt" src="img/overview.webp" width="1600" height="1216" alt="The FortiBreak window while connected: a green power button with a shield, the word Connected, buttons to disconnect, pause or sign in again, and cards for throughput and tunnel health.">
+        <img class="dk" src="img/overview-dark.webp" width="1600" height="1216" alt="The FortiBreak window in dark mode while connected, with the green power button, throughput and tunnel health cards.">
+        <figcaption>The Overview while connected. Screenshots in this guide use sample data.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="new" aria-labelledby="new-h">
+      <h2 id="new-h">New in 0.5<small>October 2026</small></h2>
+      <ul>
+        <li><a href="#sign-in">Back where you were.</a> After browser sign-in, FortiBreak returns you to the app you were using.</li>
+        <li><a href="#pause">Pause.</a> Turn the VPN off for 15 minutes to 2 hours; it comes back on its own.</li>
+        <li><a href="#connected">Tunnel health.</a> Latency, loss and an automatic restart when the tunnel stops answering.</li>
+        <li><a href="#session-limit">Session-limit warning.</a> A heads-up 10 minutes before the gateway ends your session.</li>
+        <li><a href="#network">Network and History.</a> See your routes and DNS, test a host, and review past sessions.</li>
+        <li><a href="#shortcuts">Shortcuts, links and Wi-Fi rules.</a> Control the VPN from anywhere, or let it follow your network.</li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="layout wrap">
+    <details class="toc" id="toc" open>
+      <summary>Contents</summary>
+      <nav class="toc-body" aria-label="Contents">
+        <div class="toc-group">
+          <p class="toc-label">Get started</p>
+          <ul>
+            <li><a href="#install">Install</a></li>
+            <li><a href="#add-connection">Add a connection</a></li>
+            <li><a href="#connect">Connect</a></li>
+            <li><a href="#sign-in">Sign in</a></li>
+          </ul>
+        </div>
+        <div class="toc-group">
+          <p class="toc-label">Everyday use</p>
+          <ul>
+            <li><a href="#connected">While you’re connected</a></li>
+            <li><a href="#pause">Pause and reconnect</a></li>
+            <li><a href="#network">Network</a></li>
+            <li><a href="#history">History</a></li>
+            <li><a href="#activity">Activity log</a></li>
+            <li><a href="#menu-bar">Menu bar</a></li>
+          </ul>
+        </div>
+        <div class="toc-group">
+          <p class="toc-label">Make it yours</p>
+          <ul>
+            <li><a href="#shortcuts">Keyboard shortcuts</a></li>
+            <li><a href="#links">Links</a></li>
+            <li><a href="#after-connect">After connecting</a></li>
+            <li><a href="#wifi">Wi-Fi rules</a></li>
+            <li><a href="#app-settings">Settings</a></li>
+            <li><a href="#connection-settings">Connection settings</a></li>
+          </ul>
+        </div>
+        <div class="toc-group">
+          <p class="toc-label">Reference</p>
+          <ul>
+            <li><a href="#privacy">Privacy and safety</a></li>
+            <li><a href="#troubleshooting">Troubleshooting</a></li>
+            <li><a href="#limits">What it doesn’t do</a></li>
+            <li><a href="#remove">Remove FortiBreak</a></li>
+          </ul>
+        </div>
+      </nav>
+    </details>
+
+    <article>
+      <!-- ───────── Get started ───────── -->
+      <section id="install">
+        <p class="kicker">Get started</p>
+        <h2>Install</h2>
+        <p class="intro">You need a Mac with Apple Silicon. Each release lists the macOS version it needs; version 0.5.1 needs macOS 27 or later.</p>
+        <ol class="steps">
+          <li><div><p><strong>Download</strong> the latest <code>FortiBreak-X.Y.Z.zip</code> from the <a href="https://github.com/galook/fortibreak/releases" target="_blank" rel="noopener">Releases page</a>.</p></div></li>
+          <li><div><p><strong>Unzip it</strong> and move <span class="ui">FortiBreak.app</span> to your Applications folder.</p></div></li>
+          <li><div>
+            <p><strong>Clear the download quarantine once.</strong> FortiBreak isn’t notarized by Apple, so macOS refuses to open it until you run this in Terminal:</p>
+            <div class="code"><pre><code>xattr -dr com.apple.quarantine /Applications/FortiBreak.app</code></pre><button class="copy" type="button">Copy</button></div>
+          </div></li>
+          <li><div>
+            <p><strong>Open FortiBreak and enable the VPN helper.</strong> Click <span class="ui">Enable…</span> in the <span class="ui">Enable the VPN helper</span> banner. macOS asks for an administrator password once. FortiBreak never sees or stores that password.</p>
+          </div></li>
+        </ol>
+        <div class="note warn" role="note">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 18 17H2L10 2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 8v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="10" cy="14.4" r="1" fill="currentColor"/></svg>
+          <div><p><strong>Disconnect FortiClient before you connect with FortiBreak.</strong> FortiClient can stay installed; FortiBreak never changes it.</p></div>
+        </div>
+        <h3>Updating</h3>
+        <p>Replace FortiBreak.app with the new version and clear the quarantine again. The first time you open a new build, the banner reads <span class="ui">Approve the VPN helper for this version</span>. Click <span class="ui">Approve…</span> and enter your password. Your connections and saved passwords stay as they are.</p>
+      </section>
+
+      <section id="add-connection">
+        <h2>Add a connection</h2>
+        <p class="intro">With no connections yet, FortiBreak opens on a welcome screen with three ways to start. Importing never starts a VPN connection.</p>
+        <figure class="shot">
+          <img class="win lt" src="img/welcome.webp" width="1600" height="912" loading="lazy" alt="The welcome screen with three tiles: Use FortiClient Profile, Import a File, and Set Up Manually.">
+          <img class="win dk" src="img/welcome-dark.webp" width="1600" height="912" loading="lazy" alt="The welcome screen in dark mode with three tiles: Use FortiClient Profile, Import a File, and Set Up Manually.">
+        </figure>
+        <div class="ways">
+          <div class="way"><h4>Use FortiClient Profile</h4><p>Reads the gateway and single sign-on settings macOS already knows from FortiClient. It doesn’t open FortiClient’s protected storage, so you may need to add your username.</p></div>
+          <div class="way"><h4>Import a File <kbd>⌘O</kbd></h4><p>An unencrypted FortiClient XML or JSON export, an Apple configuration profile with a managed VPN payload, or an openfortivpn config. You review every profile before you click <span class="ui">Import</span>.</p></div>
+          <div class="way"><h4>Set Up Manually <kbd>⌘N</kbd></h4><p>Enter the gateway host and port (usually 443), a realm if you have one, how you sign in, and your username.</p></div>
+        </div>
+        <p>To add more later, use the <span class="ui">+</span> menu at the top of the sidebar.</p>
+        <h3>What doesn’t transfer</h3>
+        <ul>
+          <li>Encrypted exports can’t be read, and encrypted Fortinet passwords don’t carry over. Type the password when you connect.</li>
+          <li>Certificates embedded in a profile don’t transfer. Point to PEM files in <a href="#connection-settings">Connection settings</a> instead.</li>
+          <li>Plain-text passwords in a file are thrown away unless you turn on <span class="ui">Store imported passwords in Keychain</span>.</li>
+          <li>IPsec profiles import so you can review them, but they’re marked <span class="ui">Import only</span> and can’t connect.</li>
+        </ul>
+        <h3>Pick a favorite</h3>
+        <p>Click the star in the toolbar, or right-click a connection and choose <span class="ui">Add to Favorites</span>. Your favorite is the starred connection, or your only one, and it sorts to the top. It’s the one FortiBreak connects when it opens, when you press the global shortcut, open a <code>fortibreak://connect</code> link, or join untrusted Wi-Fi.</p>
+      </section>
+
+      <section id="connect">
+        <h2>Connect</h2>
+        <p class="intro">Select a connection in the sidebar and click the big power button, or press <kbd>⌘K</kbd>. Click it again to disconnect.</p>
+        <div class="ways">
+          <div class="way"><h4>From the menu bar</h4><p>Flip the switch at the top of the FortiBreak panel, or click a connection in its list.</p></div>
+          <div class="way"><h4>From any app</h4><p><kbd>⌃⌥⌘V</kbd> connects your favorite, or disconnects whatever is active.</p></div>
+          <div class="way"><h4>From a link</h4><p><code>fortibreak://connect</code> works from Shortcuts, Raycast or a script.</p></div>
+          <div class="way"><h4>On its own</h4><p>When FortiBreak opens (your favorite, by default), or when you join Wi-Fi you don’t trust.</p></div>
+        </div>
+        <p>One connection can be active at a time. To switch, disconnect first.</p>
+
+        <h3 id="states">Read the power button</h3>
+        <p>The button, the glow behind it and the title underneath always agree. Each state has its own color.</p>
+        <div class="states">
+          <figure class="state">
+            <img class="lt" src="img/state-idle.webp" width="672" height="532" loading="lazy" alt="Blue power button titled Not Connected.">
+            <img class="dk" src="img/state-idle-dark.webp" width="672" height="532" loading="lazy" alt="Blue power button titled Not Connected, dark mode.">
+            <figcaption><b><i class="dot" style="--c: var(--accent)"></i>Not Connected</b>Ready. Click to connect.</figcaption>
+          </figure>
+          <figure class="state">
+            <img class="lt" src="img/state-connecting.webp" width="672" height="532" loading="lazy" alt="Orange power button with a spinning ring, titled Connecting.">
+            <img class="dk" src="img/state-connecting-dark.webp" width="672" height="532" loading="lazy" alt="Orange power button with a spinning ring, titled Connecting, dark mode.">
+            <figcaption><b><i class="dot" style="--c: var(--busy)"></i>Connecting</b>Signing in or reconnecting. <span class="ui">Cancel</span> stops it.</figcaption>
+          </figure>
+          <figure class="state">
+            <img class="lt" src="img/state-connected.webp" width="672" height="532" loading="lazy" alt="Green power button showing a shield, titled Connected.">
+            <img class="dk" src="img/state-connected-dark.webp" width="672" height="532" loading="lazy" alt="Green power button showing a shield, titled Connected, dark mode.">
+            <figcaption><b><i class="dot" style="--c: var(--ok)"></i>Connected</b>The tunnel is up.</figcaption>
+          </figure>
+          <figure class="state">
+            <img class="lt" src="img/state-paused.webp" width="672" height="532" loading="lazy" alt="Purple button with a play symbol, titled Paused.">
+            <img class="dk" src="img/state-paused-dark.webp" width="672" height="532" loading="lazy" alt="Purple button with a play symbol, titled Paused, dark mode.">
+            <figcaption><b><i class="dot" style="--c: var(--pause)"></i>Paused</b>Off until the time shown. Click to resume.</figcaption>
+          </figure>
+        </div>
+        <ul class="other-states">
+          <li><i class="dot" style="--c: var(--bad)"></i><span><b>Couldn’t Connect.</b> The line under the title says why. The <a href="#activity">Activity log</a> has the details.</span></li>
+          <li><i class="dot" style="--c: var(--faint)"></i><span><b>Gray.</b> Not available yet: approve the VPN helper, disconnect the other connection, or this is an IPsec profile.</span></li>
+        </ul>
+      </section>
+
+      <section id="sign-in">
+        <h2>Sign in</h2>
+        <p class="intro">Each connection uses one of two sign-in methods. You choose it in <a href="#connection-settings">Connection settings</a>.</p>
+        <h3>Password &amp; MFA</h3>
+        <p>Type your password in the <span class="ui">Sign In</span> card and click the power button. Turn on <span class="ui">Save password in Keychain</span> to skip typing it next time; then leave the field empty and FortiBreak uses the saved one.</p>
+        <p>If your gateway asks for a one-time code, a <span class="ui">Verification</span> card shows the gateway’s question. Type the code and press <span class="ui">Continue</span>. If FortiBreak is in the background, a notification tells you it needs you.</p>
+        <h3>Browser SSO</h3>
+        <p>FortiBreak opens your company’s sign-in page in your default browser. If the page asks you to log in, finish within about 50 seconds. When sign-in completes, FortiBreak switches you back to the app you were using. If your browser still remembers your login, that takes about a second.</p>
+        <div class="note" role="note">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M10 9v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1" fill="currentColor"/></svg>
+          <div>
+            <p><strong>Timed out?</strong> Press Connect again. Don’t reuse an old sign-in tab or callback link; each attempt gets a fresh one.</p>
+            <p>Chrome comes to the front for a moment, because it brings itself forward whenever it opens a link.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───────── Everyday use ───────── -->
+      <section id="connected">
+        <p class="kicker">Everyday use</p>
+        <h2>While you’re connected</h2>
+        <p class="intro">The row of chips under the button shows tunnel health, session time, your VPN address, and download and upload speed. Below them, cards fill in with live details.</p>
+        <figure class="shot">
+          <img class="lt" src="img/health.webp" width="1152" height="430" loading="lazy" alt="Throughput card showing 178 KB/s download and 21 KB/s upload with a chart, and Tunnel Health card showing Good, 16 ms median latency and 0 % loss.">
+          <img class="dk" src="img/health-dark.webp" width="1152" height="430" loading="lazy" alt="Throughput and Tunnel Health cards in dark mode.">
+        </figure>
+        <dl class="defs">
+          <dt>Throughput</dt><dd>Current download and upload speed, totals for this session, and a chart of recent minutes.</dd>
+          <dt>Tunnel Health</dt><dd>Median latency, the share of missed checks in the last minute, and a chart. Red dashed lines mark missed answers.</dd>
+          <dt>Session</dt><dd>How long you’ve been connected, since when, and when the gateway is expected to end the session.</dd>
+          <dt>VPN Address</dt><dd>Your address inside the company network, and the tunnel interface, such as <code>ppp0</code>.</dd>
+          <dt>Gateway, Sign-in</dt><dd>Where you’re connected and how you signed in.</dd>
+        </dl>
+
+        <h3>Tunnel health</h3>
+        <p>Every 5 seconds FortiBreak checks the DNS server your gateway assigned. To check a different host, set <span class="ui">Health check host</span> in Connection settings, as <code>host</code> or <code>host:port</code>.</p>
+        <div class="ladder" role="list">
+          <div class="rung" role="listitem" style="--c: var(--ok)"><div class="meter"></div><b><i class="dot"></i>Good</b><p>Median latency up to 250 ms, and no more than 15% of checks missed.</p></div>
+          <div class="rung" role="listitem" style="--c: var(--busy)"><div class="meter"></div><b><i class="dot"></i>Slow</b><p>Median above 250 ms, or more than 15% of checks missed in the last minute.</p></div>
+          <div class="rung" role="listitem" style="--c: var(--bad)"><div class="meter"></div><b><i class="dot"></i>Stalled</b><p>The last two checks got no answer.</p></div>
+          <div class="rung" role="listitem" style="--c: var(--accent)"><div class="meter"></div><b><i class="dot"></i>Restarted</b><p>No answer for about 20 seconds. With automatic reconnect on, FortiBreak restarts the tunnel.</p></div>
+        </div>
+        <p>With automatic reconnect off, FortiBreak only notifies you that the tunnel looks stalled. <span class="ui">No check</span> means there is no host to check.</p>
+
+        <h3 id="session-limit">Session limit</h3>
+        <p>Many gateways end every session after a fixed time, often 8 or 12 hours. FortiBreak learns that limit when your sessions drop at the same length, or you set it for each connection. Ten minutes before the end, a banner appears:</p>
+        <figure class="shot">
+          <img class="lt" src="img/expiring.webp" width="1152" height="456" loading="lazy" alt="Under the Connected title, an orange banner reads: Gateway session ends around 15:01. Sign in again now so the VPN does not drop in the middle of something. A Sign In Again button is on the right.">
+          <img class="dk" src="img/expiring-dark.webp" width="1152" height="456" loading="lazy" alt="The session-ends banner with a Sign In Again button, dark mode.">
+        </figure>
+        <p>Click <span class="ui">Sign In Again</span> to start a fresh session when it suits you, instead of losing the VPN in the middle of something. The expected end time also shows on the Session card and in the menu bar panel.</p>
+      </section>
+
+      <section id="pause">
+        <h2>Pause and reconnect</h2>
+        <h3 style="margin-top: 0.4em">Pause</h3>
+        <p>Click <span class="ui">Pause</span> and choose 15 minutes, 30 minutes, 1 hour or 2 hours. FortiBreak disconnects now and reconnects when the time is up, waiting for a network if you’re offline. While paused, <span class="ui">Resume Now</span> reconnects early and <span class="ui">Stay Off</span> cancels the timer. A <a href="#links">link</a> can pause for any time from 1 to 480 minutes.</p>
+        <h3>Automatic reconnect</h3>
+        <p>If the tunnel drops without you pressing Disconnect, FortiBreak tries again up to three times:</p>
+        <div class="timeline" role="img" aria-label="Timeline: the tunnel drops at 0 seconds. Attempt 1 after 5 seconds, attempt 2 after 15 more seconds at 20 seconds, attempt 3 after 45 more seconds at 65 seconds.">
+          <div class="track">
+            <div class="seg" style="width: 7.69%; --a: 34%">5 s</div>
+            <div class="seg" style="width: 23.08%; --a: 24%">15 s</div>
+            <div class="seg" style="width: 69.23%; --a: 14%; border-right: 0">45 s wait</div>
+          </div>
+          <span class="mark" style="left: 0"></span>
+          <span class="mark" style="left: 7.69%"></span>
+          <span class="mark" style="left: 30.77%"></span>
+          <span class="mark" style="left: calc(100% - 2px)"></span>
+          <span class="lab up" style="left: 0"><b>Tunnel drops</b>0 s</span>
+          <span class="lab down" style="left: 7.69%"><b>Attempt 1</b>5 s</span>
+          <span class="lab up" style="left: 30.77%"><b>Attempt 2</b>20 s</span>
+          <span class="lab down end" style="left: 100%"><b>Attempt 3</b>65 s</span>
+        </div>
+        <p class="cap">Drawn to scale. If the third attempt fails, FortiBreak stops and notifies you.</p>
+        <ul>
+          <li>Before each attempt it waits until your Mac has a network.</li>
+          <li>Browser SSO connections may open a sign-in tab while reconnecting.</li>
+          <li>A sign-in that fails the first time, like a wrong password or a cancelled browser login, is never retried.</li>
+          <li>Press <span class="ui">Cancel Reconnect</span> (<kbd>⌘K</kbd>) to stop a pending attempt.</li>
+          <li>Turn reconnecting off in Settings › General, or with the <span class="ui">Reconnect automatically</span> switch in the menu bar panel.</li>
+        </ul>
+      </section>
+
+      <section id="network">
+        <h2>Network</h2>
+        <p class="intro">The <span class="ui">Network</span> tab shows what the gateway gave you while you’re connected, and lets you test whether a host answers through the VPN.</p>
+        <figure class="shot">
+          <img class="win lt" src="img/network.webp" width="1600" height="832" loading="lazy" alt="The Network tab listing seven routes through the VPN, DNS servers 10.0.0.50 and 10.0.0.40 with search domain corp.example.com, and a Reachability Test field.">
+          <img class="win dk" src="img/network-dark.webp" width="1600" height="832" loading="lazy" alt="The Network tab in dark mode with routes, DNS and the Reachability Test.">
+        </figure>
+        <dl class="defs">
+          <dt>Routes Through the VPN</dt><dd>The networks that go through the tunnel. Everything else uses your normal connection. If the gateway sends all traffic through the VPN, it says so. <span class="ui">Refresh</span> reads the routing table again.</dd>
+          <dt>DNS</dt><dd>The DNS servers and search domains the gateway assigned. macOS uses them while you’re connected.</dd>
+          <dt>Reachability Test</dt><dd>Type a host or <code>host:port</code> and click <span class="ui">Test</span>. Without a port it tries 443.</dd>
+        </dl>
+        <p>What the test results mean:</p>
+        <ul class="results">
+          <li style="--c: var(--ok)"><i class="ic">✓</i><div><q>Answered in 24 ms through the VPN (ppp0)</q><span>It works, and the traffic goes through the tunnel.</span></div></li>
+          <li style="--c: var(--busy)"><i class="ic">✓</i><div><q>Answered in 9 ms outside the VPN (en0)</q><span>The host answers, but not through the VPN. The gateway doesn’t route that network to you.</span></div></li>
+          <li style="--c: var(--caution)"><i class="ic">!</i><div><q>Reachable in 31 ms, but port 22 is closed</q><span>The host is there, but nothing is listening on that port.</span></div></li>
+          <li style="--c: var(--bad)"><i class="ic">✕</i><div><q>No answer on port 443 · Could not resolve this name</q><span>The host doesn’t answer, or its name isn’t known to DNS.</span></div></li>
+        </ul>
+      </section>
+
+      <section id="history">
+        <h2>History</h2>
+        <p class="intro">The <span class="ui">History</span> tab adds up the last seven days for the selected connection.</p>
+        <figure class="shot">
+          <img class="win lt" src="img/history.webp" width="1600" height="1216" loading="lazy" alt="The History tab: 46 h 47 min connected this week over 10 sessions, 7.22 GB of data, 3 drops, a learned session limit of about 8 hours, a bar chart of hours per day, and a list of sessions.">
+          <img class="win dk" src="img/history-dark.webp" width="1600" height="1216" loading="lazy" alt="The History tab in dark mode.">
+        </figure>
+        <p>At the top: connected time, data used, drops (stalls included) and the gateway’s session limit, whether learned or set by you. A bar chart shows hours connected per day. Each session in the list shows when it started, how long it lasted, the data used and how it ended:</p>
+        <ul class="pills">
+          <li><i class="dot" style="--c: var(--ok)"></i>Connected now</li>
+          <li><i class="dot" style="--c: var(--faint)"></i>Disconnected</li>
+          <li><i class="dot" style="--c: var(--bad)"></i>Dropped by the network or gateway</li>
+          <li><i class="dot" style="--c: var(--busy)"></i>Restarted after a stall</li>
+          <li><i class="dot" style="--c: var(--pause)"></i>Paused</li>
+          <li><i class="dot" style="--c: var(--accent)"></i>Signed in again</li>
+        </ul>
+        <p><span class="ui">Clear History</span> in the toolbar removes past sessions for every connection and forgets any learned session limit.</p>
+      </section>
+
+      <section id="activity">
+        <h2>Activity log</h2>
+        <p class="intro">Press <kbd>⌘L</kbd> or choose the <span class="ui">Activity</span> tab for a step-by-step log of the latest session, including snapshots of your network before and after connecting.</p>
+        <figure class="shot">
+          <img class="win lt" src="img/activity.webp" width="1600" height="704" loading="lazy" alt="The Activity tab listing events such as Connection requested through the approved VPN helper, Connected to gateway, and Tunnel is up and running, each with a time.">
+          <img class="win dk" src="img/activity-dark.webp" width="1600" height="704" loading="lazy" alt="The Activity tab in dark mode.">
+        </figure>
+        <dl class="defs">
+          <dt>Filter</dt><dd>Type in the search field to show only matching events.</dd>
+          <dt>Check Network</dt><dd>Records your Mac’s current routes and DNS servers in the log. It contacts no outside service.</dd>
+          <dt>Copy</dt><dd>Copies the events shown, ready to send to your IT team.</dd>
+          <dt>Clear</dt><dd>Empties the log. Not available while connected.</dd>
+        </dl>
+        <div class="note" role="note">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="9" width="12" height="8.5" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9" stroke="currentColor" stroke-width="1.7"/></svg>
+          <div><p>Passwords and session tokens are removed from the log, and it’s kept after you quit. It does include local addresses, DNS servers and routes, so read it before you share it.</p></div>
+        </div>
+      </section>
+
+      <section id="menu-bar">
+        <h2>Menu bar</h2>
+        <p class="intro">FortiBreak keeps an icon in the menu bar. Closing the window doesn’t stop the VPN; the icon changes with the connection state.</p>
+        <p>Click the icon for a panel with:</p>
+        <ul>
+          <li>A switch to connect or disconnect, next to the current state and connection.</li>
+          <li>While connected: session time, download and upload speed, health, <span class="ui">Pause</span>, <span class="ui">Sign In Again</span> and when the session ends.</li>
+          <li>While paused: <span class="ui">Resume Now</span>, <span class="ui">Stay Off</span> and when the VPN resumes.</li>
+          <li>Your connections, favorites first. Click one to connect or disconnect it.</li>
+          <li>The <span class="ui">Reconnect automatically</span> switch.</li>
+          <li><span class="ui">Open FortiBreak</span>, Settings and Quit.</li>
+        </ul>
+        <p>Quitting FortiBreak disconnects the VPN first. You also get notifications when the VPN connects, drops, reconnects, pauses, nears its session limit or needs a password or code.</p>
+      </section>
+
+      <!-- ───────── Make it yours ───────── -->
+      <section id="shortcuts">
+        <p class="kicker">Make it yours</p>
+        <h2>Keyboard shortcuts</h2>
+        <div class="table">
+          <table>
+            <thead><tr><th scope="col">Keys</th><th scope="col">Does</th></tr></thead>
+            <tbody>
+              <tr><td><kbd>⌘K</kbd></td><td>Connect or disconnect the selected connection. Also cancels a pending reconnect.</td></tr>
+              <tr><td><kbd>⌘L</kbd></td><td>Show the Activity log.</td></tr>
+              <tr><td><kbd>⌘N</kbd></td><td>New connection.</td></tr>
+              <tr><td><kbd>⌘O</kbd></td><td>Import VPN profiles.</td></tr>
+              <tr><td><kbd>⌘,</kbd></td><td>Settings.</td></tr>
+              <tr><td><kbd>⌃⌥⌘V</kbd></td><td><strong>Works in any app.</strong> Connects your favorite, or disconnects whatever is active, with a small confirmation on screen. Switch to <kbd>⌃⌥V</kbd> or <kbd>⌃⌥⌘K</kbd>, or turn it off, in Settings › Shortcuts.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="links">
+        <h2>Links</h2>
+        <p class="intro"><code>fortibreak://</code> links let the Shortcuts app (with <span class="ui">Open URLs</span>), Raycast, a bookmark or a script control the VPN.</p>
+        <div class="table nowrap">
+          <table>
+            <thead><tr><th scope="col">Link</th><th scope="col">Does</th></tr></thead>
+            <tbody>
+              <tr><td><div class="linkcell"><code>fortibreak://connect</code><button class="mini-copy" type="button" data-copy="fortibreak://connect">Copy</button></div></td><td>Connect your favorite.</td></tr>
+              <tr><td><div class="linkcell"><code>fortibreak://connect?profile=Office</code><button class="mini-copy" type="button" data-copy="fortibreak://connect?profile=Office">Copy</button></div></td><td>Connect a connection by name. Write spaces as <code>%20</code>.</td></tr>
+              <tr><td><div class="linkcell"><code>fortibreak://disconnect</code><button class="mini-copy" type="button" data-copy="fortibreak://disconnect">Copy</button></div></td><td>Disconnect, or cancel a pause or reconnect.</td></tr>
+              <tr><td><div class="linkcell"><code>fortibreak://toggle</code><button class="mini-copy" type="button" data-copy="fortibreak://toggle">Copy</button></div></td><td>Connect or disconnect.</td></tr>
+              <tr><td><div class="linkcell"><code>fortibreak://pause?minutes=30</code><button class="mini-copy" type="button" data-copy="fortibreak://pause?minutes=30">Copy</button></div></td><td>Pause for 1 to 480 minutes.</td></tr>
+              <tr><td><div class="linkcell"><code>fortibreak://resume</code><button class="mini-copy" type="button" data-copy="fortibreak://resume">Copy</button></div></td><td>End a pause now.</td></tr>
+              <tr><td><div class="linkcell"><code>fortibreak://open</code><button class="mini-copy" type="button" data-copy="fortibreak://open">Copy</button></div></td><td>Show the FortiBreak window.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>From Terminal:</p>
+        <div class="code"><pre><code>open "fortibreak://toggle"</code></pre><button class="copy" type="button">Copy</button></div>
+        <p>Browsers ask before opening these links. To turn links off, clear <span class="ui">Allow fortibreak:// links</span> in Settings › Shortcuts.</p>
+      </section>
+
+      <section id="after-connect">
+        <h2>After connecting</h2>
+        <p class="intro">Each connection can open links and run a script once the tunnel is up. Set them up in Connection settings, under <span class="ui">After Connecting</span>.</p>
+        <dl class="defs">
+          <dt>Open link</dt><dd>Web pages (<code>https://</code>), file shares (<code>smb://</code>, <code>afp://</code>, <code>nfs://</code>) and remote sessions (<code>ssh://</code>, <code>vnc://</code>, <code>rdp://</code>).</dd>
+          <dt>Run script</dt><dd>A zsh script that runs as you, about two seconds after connecting. It must be a file you own that nobody else can change. It gets up to 2 minutes, and its output appears in the Activity log.</dd>
+          <dt>Also after automatic reconnects</dt><dd>Off by default, so actions run only when you connect yourself.</dd>
+        </dl>
+        <p>The script receives these environment variables:</p>
+        <div class="table nowrap">
+          <table>
+            <thead><tr><th scope="col">Variable</th><th scope="col">Value</th></tr></thead>
+            <tbody>
+              <tr><td><code>FORTIBREAK_CONNECTION</code></td><td>The connection’s name</td></tr>
+              <tr><td><code>FORTIBREAK_GATEWAY</code></td><td>The gateway host</td></tr>
+              <tr><td><code>FORTIBREAK_VPN_ADDRESS</code></td><td>Your address inside the VPN</td></tr>
+              <tr><td><code>FORTIBREAK_INTERFACE</code></td><td>The tunnel interface, such as <code>ppp0</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="code"><pre><code><span class="c"># ~/Scripts/on-vpn.sh — mount the team share and note the address</span>
+open "smb://files.example.com/team"
+echo "$(date) $FORTIBREAK_CONNECTION $FORTIBREAK_VPN_ADDRESS" &gt;&gt; ~/vpn-log.txt</code></pre><button class="copy" type="button">Copy</button></div>
+      </section>
+
+      <section id="wifi">
+        <h2>Wi-Fi rules</h2>
+        <div class="split">
+          <div>
+            <p class="intro" style="margin-top: 0">Connect automatically on networks you don’t trust, like cafés and hotels, and stay off at home or in the office.</p>
+            <p>In Settings › Wi-Fi:</p>
+            <ul>
+              <li>Turn on <span class="ui">Connect automatically on untrusted Wi-Fi</span> and pick the connection. Your favorite is the default.</li>
+              <li>Add trusted networks by name, or click <span class="ui">Trust “name”</span> for the network you’re on. Names must match exactly.</li>
+              <li>To drop the VPN when you get there, turn on <span class="ui">Disconnect when I join a trusted network</span>.</li>
+            </ul>
+            <p>Wired and unknown networks are left alone. If you disconnect by hand, FortiBreak waits until you change networks before acting again.</p>
+          </div>
+          <figure class="shot">
+            <img class="settings" src="img/settings-wifi.webp" width="1040" height="1136" loading="lazy" alt="The Wi-Fi tab of Settings with switches for connecting on untrusted Wi-Fi and disconnecting on trusted networks, a list of trusted networks, and Location access buttons.">
+          </figure>
+        </div>
+        <div class="note" role="note">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M10 9v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1" fill="currentColor"/></svg>
+          <div><p>macOS reveals Wi-Fi names only to apps with Location access, so FortiBreak asks for it. It uses Location only to read the network name. Use <span class="ui">Allow Location Access…</span> or <span class="ui">Open Privacy Settings</span> on the same tab.</p></div>
+        </div>
+      </section>
+
+      <section id="app-settings">
+        <h2>Settings</h2>
+        <p class="intro">Open Settings with <kbd>⌘,</kbd> or the gear in the menu bar panel. The Wi-Fi tab is described <a href="#wifi">above</a>.</p>
+        <div class="trio">
+          <figure class="shot">
+            <img class="settings" src="img/settings-general.webp" width="1040" height="1056" loading="lazy" alt="The General tab of Settings.">
+            <h3>General</h3>
+            <ul>
+              <li><span class="ui">Reconnect automatically if the tunnel drops</span>. On by default.</li>
+              <li><span class="ui">When FortiBreak opens</span>: don’t connect, connect the favorite (default), or a specific connection.</li>
+              <li><span class="ui">Open FortiBreak at login</span>. macOS may ask you to allow it in System Settings › General › Login Items.</li>
+              <li>Notifications, the app version and the VPN engine.</li>
+            </ul>
+          </figure>
+          <figure class="shot">
+            <img class="settings" src="img/settings-shortcuts.webp" width="1040" height="1216" loading="lazy" alt="The Shortcuts tab of Settings with the global shortcut and a list of fortibreak links with Copy buttons.">
+            <h3>Shortcuts</h3>
+            <ul>
+              <li>The global shortcut: <kbd>⌃⌥⌘V</kbd>, <kbd>⌃⌥V</kbd>, <kbd>⌃⌥⌘K</kbd> or off.</li>
+              <li><span class="ui">Allow fortibreak:// links</span>, with each link ready to copy.</li>
+            </ul>
+          </figure>
+          <figure class="shot">
+            <img class="settings" src="img/settings-helper.webp" width="1040" height="676" loading="lazy" alt="The VPN Helper tab of Settings showing status Approved, with Remove Helper and Repair Helper buttons.">
+            <h3>VPN Helper</h3>
+            <ul>
+              <li>Status: <span class="ui">Approved</span>, <span class="ui">Needs approval</span> or <span class="ui">Not installed</span>.</li>
+              <li><span class="ui">Approve Helper…</span> or <span class="ui">Repair Helper…</span> asks macOS for your password once.</li>
+              <li><span class="ui">Remove Helper…</span> uninstalls it. Your connections and passwords stay.</li>
+            </ul>
+          </figure>
+        </div>
+      </section>
+
+      <section id="connection-settings">
+        <h2>Connection settings</h2>
+        <p class="intro">Select a connection and click the sliders button in the toolbar, or right-click it and choose <span class="ui">Edit…</span>. You can’t edit while connected.</p>
+        <figure class="shot">
+          <img class="win lt" src="img/editor.webp" width="1600" height="1216" loading="lazy" alt="The Connection Settings sheet with Profile, Gateway, Authentication and Certificates sections.">
+          <img class="win dk" src="img/editor-dark.webp" width="1600" height="1216" loading="lazy" alt="The Connection Settings sheet in dark mode.">
+        </figure>
+        <div class="table">
+          <table>
+            <thead><tr><th scope="col">Section</th><th scope="col">Fields</th><th scope="col">Notes</th></tr></thead>
+            <tbody>
+              <tr><td>Profile</td><td>Name, Description</td><td>The name shows in the sidebar, the menu bar and notifications.</td></tr>
+              <tr><td>Gateway</td><td>Host, Port, Realm</td><td>Port is usually 443. Fill in Realm only if your IT team gave you one.</td></tr>
+              <tr><td>Authentication</td><td>Sign-in, Username</td><td>Password &amp; MFA or Browser SSO. Password &amp; MFA needs a username.</td></tr>
+              <tr><td>Certificates</td><td>CA bundle, Client certificate, Private key, Pinned SHA-256</td><td>PEM files. Normal certificate checks stay on. Pin a fingerprint only if you got it through a trusted channel.</td></tr>
+              <tr><td>Monitoring</td><td>Health check host, Session limit warning</td><td><code>host</code> or <code>host:port</code>. Session limit: learn from drops (default), off, or after 4, 8, 10, 12 or 24 hours.</td></tr>
+              <tr><td>After Connecting</td><td>Open link, Run script, Also after automatic reconnects</td><td>See <a href="#after-connect">After connecting</a>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>To delete a connection, right-click it and choose <span class="ui">Delete…</span>. Its saved password is removed too. FortiClient is unaffected.</p>
+      </section>
+
+      <!-- ───────── Reference ───────── -->
+      <section id="privacy">
+        <p class="kicker">Reference</p>
+        <h2>Privacy and safety</h2>
+        <h3 style="margin-top: 0.4em">How the VPN helper works</h3>
+        <p>Starting a VPN needs administrator rights. Rather than asking for your password every time you connect, FortiBreak installs a small helper once, with your approval.</p>
+        <div class="flow" role="img" aria-label="FortiBreak talks to the VPN helper over a private socket on your Mac. The helper, running as root, starts the bundled openfortivpn engine, which connects to your gateway.">
+          <div class="node"><b>FortiBreak</b><span>runs as you</span></div>
+          <div class="arrow">→<small>private socket</small></div>
+          <div class="node root"><b>VPN helper</b><span>root, approved once</span></div>
+          <div class="arrow">→<small>fixed settings</small></div>
+          <div class="node"><b>VPN engine</b><span>bundled openfortivpn</span></div>
+          <div class="arrow">→<small>SSL VPN</small></div>
+          <div class="node"><b>Your gateway</b><span>company network</span></div>
+        </div>
+        <ul>
+          <li>The helper only accepts the FortiBreak build you approved, running as your Mac user. That’s why each update needs approval again.</li>
+          <li>It can only start the bundled VPN engine, with a fixed list of settings. It runs no shell and no other programs.</li>
+          <li>It starts when your Mac starts and waits. It never connects a VPN on its own at startup or login.</li>
+          <li>Disconnecting or quitting FortiBreak stops the VPN engine.</li>
+          <li>Setup copies its files out of the signed app and checks each one against a recorded fingerprint. No sudoers rule is added.</li>
+        </ul>
+        <h3>Your data</h3>
+        <div class="table">
+          <table>
+            <thead><tr><th scope="col">What</th><th scope="col">Where</th></tr></thead>
+            <tbody>
+              <tr><td>Connections</td><td><code>~/Library/Application Support/FortiBreak/profiles.json</code>, readable only by you</td></tr>
+              <tr><td>Saved passwords, if you choose</td><td>Your Keychain, service <code>eu.local.fortibreak.vpn</code></td></tr>
+              <tr><td>Latest session log</td><td><code>~/Library/Application Support/FortiBreak/last-session.json</code>, readable only by you</td></tr>
+              <tr><td>Settings</td><td><code>~/Library/Preferences/eu.local.fortibreak.plist</code></td></tr>
+              <tr><td>VPN helper</td><td><code>/Library/PrivilegedHelperTools/eu.local.fortibreak/</code> and <code>/Library/LaunchDaemons/eu.local.fortibreak.vpn-helper.plist</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Passwords and codes travel over private connections inside your Mac. They never appear in the connections file or in the list of running processes. FortiBreak doesn’t contact outside services to test your connection on its own.</p>
+      </section>
+
+      <section id="troubleshooting" class="faq">
+        <h2>Troubleshooting</h2>
+        <details><summary>macOS says FortiBreak can’t be opened or is damaged</summary><div><p>Run the quarantine command from <a href="#install">Install</a>, then open the app again.</p></div></details>
+        <details><summary>The power button is gray</summary><div><p>The VPN helper needs approval: click <span class="ui">Enable…</span> or <span class="ui">Approve…</span> in the banner. The button is also gray while another connection is active, and for IPsec profiles, which are import only.</p></div></details>
+        <details><summary>Every update asks me to approve the helper again</summary><div><p>That’s expected. The helper trusts one exact build of FortiBreak, so each new version needs one approval.</p></div></details>
+        <details><summary>Browser sign-in timed out</summary><div><p>Press Connect again and finish signing in within about 50 seconds. Don’t go back to an old sign-in tab.</p></div></details>
+        <details><summary>My browser stays in front after SSO</summary><div><p>If the browser asked you to sign in, it stays in front until you finish; then FortiBreak brings back the app you were using. Chrome also comes forward for a moment whenever it opens a link.</p></div></details>
+        <details><summary>It says “Couldn’t Connect”</summary><div><p>Read the line under the title, then open the Activity log (<kbd>⌘L</kbd>). Make sure FortiClient is disconnected. If you need help, use <span class="ui">Copy</span> and send the log to your IT team after reading it through.</p></div></details>
+        <details><summary>A site doesn’t load over the VPN</summary><div><p>Run the <a href="#network">Reachability Test</a> on the Network tab. If the host answers outside the VPN, the gateway doesn’t route that network to you, so ask your IT team. If the name can’t be resolved, compare the DNS servers and search domains on the same tab.</p></div></details>
+        <details><summary>Health says Stalled, or the tunnel keeps restarting</summary><div><p>Your connection may be losing packets. If the gateway’s DNS server simply doesn’t answer checks, set a <span class="ui">Health check host</span> that does, such as an internal server’s <code>host:port</code>, in Connection settings.</p></div></details>
+        <details><summary>The VPN drops at the same time every day</summary><div><p>Your gateway has a session limit. FortiBreak learns it after a couple of drops at the same length, or you can set it in Connection settings. Use <span class="ui">Sign In Again</span> when the warning appears.</p></div></details>
+        <details><summary>Wi-Fi rules don’t recognize my network</summary><div><p>Allow Location access on the Wi-Fi tab of Settings, and check that the trusted name matches the network name exactly.</p></div></details>
+        <details><summary>Open at login keeps turning off</summary><div><p>Allow FortiBreak in System Settings › General › Login Items.</p></div></details>
+        <details><summary>Settings shows “VPN engine: Missing from this build”</summary><div><p>Download FortiBreak again and replace the app.</p></div></details>
+      </section>
+
+      <section id="limits">
+        <h2>What FortiBreak doesn’t do</h2>
+        <ul>
+          <li>Connect IPsec profiles. They import for review only.</li>
+          <li>EMS, ZTNA or endpoint compliance checks.</li>
+          <li>DTLS acceleration.</li>
+          <li>A kill switch that blocks traffic while the VPN is down.</li>
+          <li>Read encrypted FortiClient exports or encrypted passwords.</li>
+          <li>Match every FortiClient feature.</li>
+        </ul>
+        <p>When the gateway sends all traffic through the VPN, FortiBreak adds two routes that together cover every address, instead of replacing your normal default route. macOS manages VPN DNS. Split routes from the gateway are honored.</p>
+      </section>
+
+      <section id="remove">
+        <h2>Remove FortiBreak</h2>
+        <ol class="steps">
+          <li><div><p><strong>Delete your connections</strong> in FortiBreak. That removes their saved passwords from your Keychain.</p></div></li>
+          <li><div><p><strong>Remove the helper.</strong> Open Settings › VPN Helper, click <span class="ui">Remove Helper…</span> and approve the macOS prompt. Disconnect first; it won’t remove the helper while a VPN is running.</p></div></li>
+          <li><div><p><strong>Quit FortiBreak</strong> and move it to the Trash.</p></div></li>
+        </ol>
+        <p>If you can’t open the app any more, make sure it isn’t running, then remove the helper in Terminal:</p>
+        <div class="code"><pre><code>sudo /bin/launchctl bootout system/eu.local.fortibreak.vpn-helper
+sudo /bin/rm /Library/LaunchDaemons/eu.local.fortibreak.vpn-helper.plist
+sudo /bin/rm -rf /Library/PrivilegedHelperTools/eu.local.fortibreak
+sudo /bin/rm -f /Library/PrivilegedHelperTools/eu.local.fortibreak.session.lock
+sudo /bin/rm -f /var/run/eu.local.fortibreak.sock</code></pre><button class="copy" type="button">Copy</button></div>
+        <p>Moving only the app to the Trash leaves the helper, your connections file and saved Keychain items behind.</p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer class="wrap">
+  <div class="in">
+    <div>
+      <p><b>FortiBreak is an independent project.</b> It is not made by, affiliated with or endorsed by Fortinet. Fortinet and FortiClient are trademarks of Fortinet, Inc.</p>
+      <p>This guide covers FortiBreak 0.5.1. Screenshots use sample data and placeholder addresses.</p>
+    </div>
+    <div>
+      <p>FortiBreak includes openfortivpn (GPL-3.0 with an OpenSSL linking exception), OpenSSL (Apache-2.0) and the Mozilla CA bundle (MPL-2.0). Their license texts are in <code>FortiBreak.app/Contents/Resources/Licenses</code>.</p>
+      <p><a href="https://github.com/galook/fortibreak" target="_blank" rel="noopener">Source code</a> · <a href="https://github.com/galook/fortibreak/releases" target="_blank" rel="noopener">Releases</a> · <a href="https://github.com/adrienverge/openfortivpn" target="_blank" rel="noopener">openfortivpn</a></p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Copy buttons: code blocks and individual links.
+  function copyText(text, button) {
+    var done = function () {
+      var label = button.textContent;
+      button.textContent = "Copied";
+      button.classList.add("done");
+      setTimeout(function () { button.textContent = label; button.classList.remove("done"); }, 1600);
+    };
+    var fallback = function () {
+      var target = button.closest(".code, .linkcell");
+      var node = target && target.querySelector("code");
+      if (!node) return;
+      var range = document.createRange();
+      range.selectNodeContents(node);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      button.textContent = "Press ⌘C";
+    };
+    try {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } catch (e) { fallback(); }
+  }
+  document.querySelectorAll(".copy").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var code = button.parentElement.querySelector("code");
+      copyText(code ? code.innerText : "", button);
+    });
+  });
+  document.querySelectorAll(".mini-copy").forEach(function (button) {
+    button.addEventListener("click", function () { copyText(button.dataset.copy, button); });
+  });
+
+  // Contents: open beside the text on wide screens, folded on narrow ones.
+  var toc = document.getElementById("toc");
+  var wide = window.matchMedia("(min-width: 981px)");
+  var syncToc = function () { toc.open = wide.matches; };
+  syncToc();
+  if (wide.addEventListener) wide.addEventListener("change", syncToc);
+  toc.querySelectorAll("a").forEach(function (a) {
+    a.addEventListener("click", function () { if (!wide.matches) toc.open = false; });
+  });
+
+  // Highlight the section being read.
+  var links = {};
+  toc.querySelectorAll("a[href^='#']").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+  var targets = Object.keys(links).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  var current = null;
+  var setCurrent = function (id) {
+    if (id === current) return;
+    if (current && links[current]) links[current].removeAttribute("aria-current");
+    current = id;
+    if (links[id]) links[id].setAttribute("aria-current", "true");
+  };
+  var onScroll = function () {
+    var line = 140, active = targets[0] && targets[0].id;
+    for (var i = 0; i < targets.length; i++) {
+      if (targets[i].getBoundingClientRect().top - line <= 0) active = targets[i].id; else break;
+    }
+    setCurrent(active);
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // Open a bookmarked section or troubleshooting answer.
+  if (location.hash) {
+    var el = document.getElementById(location.hash.slice(1));
+    if (el) setTimeout(function () { el.scrollIntoView(); }, 60);
+  }
+})();
+</script>
+</body>
+</html>
